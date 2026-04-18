@@ -56,6 +56,7 @@ public class AuthService {
       rep.setRole(request.role());
       rep.setStatus(DriverStatus.AVAILABLE);
       rep.setMaxCapacity(25);
+      rep.setCostPerHour(request.costPerHour());
       user = driverRepository.save(rep);
     } else {
       user = new User();

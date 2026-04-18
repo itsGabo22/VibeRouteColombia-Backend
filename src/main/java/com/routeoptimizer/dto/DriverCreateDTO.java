@@ -7,6 +7,7 @@ public class DriverCreateDTO {
   private String name;
   private String phone;
   private Integer maxCapacity;
+  private java.math.BigDecimal costPerHour;
 
   public String getEmail() {
     return email;
@@ -46,5 +47,13 @@ public class DriverCreateDTO {
 
   public void setMaxCapacity(Integer maxCapacity) {
     this.maxCapacity = maxCapacity;
+  }
+
+  public java.math.BigDecimal getCostPerHour() {
+    return costPerHour;
+  }
+
+  public void setCostPerHour(java.math.BigDecimal costPerHour) {
+    this.costPerHour = costPerHour;
   }
 }

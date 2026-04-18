@@ -173,4 +173,11 @@ public class BatchService {
                 .filter(b -> !"COMPLETED".equals(b.getStatus()))
                 .findFirst();
     }
+
+    @Transactional
+    public Batch updateManifestUrl(Long id, String manifestUrl) {
+        Batch batch = findById(id);
+        batch.setManifestUrl(manifestUrl);
+        return batchRepository.save(batch);
+    }
 }

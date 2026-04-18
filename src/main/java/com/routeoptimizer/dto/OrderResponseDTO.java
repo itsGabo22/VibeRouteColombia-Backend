@@ -21,6 +21,7 @@ public class OrderResponseDTO {
   private String clientReference;
   private String city;
   private String nonDeliveryReason;
+  private java.math.BigDecimal price;
 
   public static OrderResponseDTO fromEntity(Order order) {
     if (order == null)
@@ -38,6 +39,7 @@ public class OrderResponseDTO {
     dto.setClientReference(order.getClientReference());
     dto.setCity(order.getCity());
     dto.setNonDeliveryReason(order.getNonDeliveryReason());
+    dto.setPrice(order.getPrice());
     return dto;
   }
 
@@ -127,5 +129,13 @@ public class OrderResponseDTO {
 
   public void setNonDeliveryReason(String nonDeliveryReason) {
     this.nonDeliveryReason = nonDeliveryReason;
+  }
+
+  public java.math.BigDecimal getPrice() {
+    return price;
+  }
+
+  public void setPrice(java.math.BigDecimal price) {
+    this.price = price;
   }
 }
