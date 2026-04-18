@@ -31,6 +31,9 @@ public class Batch {
     @JoinColumn(name = "driver_id")
     private Driver driver;
 
+    @Column(name = "manifest_url")
+    private String manifestUrl;
+
     public Batch() {
         this.creationDate = LocalDate.now();
         this.status = "OPEN";
@@ -82,5 +85,13 @@ public class Batch {
 
     public void setDriver(Driver driver) {
         this.driver = driver;
+    }
+
+    public String getManifestUrl() {
+        return manifestUrl;
+    }
+
+    public void setManifestUrl(String manifestUrl) {
+        this.manifestUrl = manifestUrl;
     }
 }

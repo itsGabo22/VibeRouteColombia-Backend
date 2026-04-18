@@ -39,4 +39,12 @@ public class AnalyticsController {
     public ResponseEntity<List<DriverRankingDTO>> getDriverRanking() {
         return ResponseEntity.ok(analyticsService.getEfficiencyRanking());
     }
+
+    /**
+     * Gets the financial profitability summary (Revenue, Costs, Profit).
+     */
+    @GetMapping("/financial-summary")
+    public ResponseEntity<com.routeoptimizer.dto.FinancialAnalyticsDTO> getFinancialSummary() {
+        return ResponseEntity.ok(analyticsService.getFinancialAnalytics());
+    }
 }

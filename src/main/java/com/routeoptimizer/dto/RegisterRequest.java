@@ -7,5 +7,6 @@ public record RegisterRequest(
         String password,
         String name,
         String phone,
-        Role role) {
+        com.routeoptimizer.model.enums.Role role,
+        java.math.BigDecimal costPerHour) {
 }

@@ -23,6 +23,9 @@ public class Driver extends User {
   @Column(name = "max_capacity", nullable = false)
   private Integer maxCapacity;
 
+  @Column(name = "cost_per_hour", precision = 10, scale = 2)
+  private java.math.BigDecimal costPerHour;
+
   public Driver() {
     super();
   }
@@ -65,5 +68,13 @@ public class Driver extends User {
 
   public void setMaxCapacity(Integer maxCapacity) {
     this.maxCapacity = maxCapacity;
+  }
+
+  public java.math.BigDecimal getCostPerHour() {
+    return costPerHour;
+  }
+
+  public void setCostPerHour(java.math.BigDecimal costPerHour) {
+    this.costPerHour = costPerHour;
   }
 }

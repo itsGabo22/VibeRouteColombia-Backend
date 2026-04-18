@@ -13,6 +13,7 @@ public class DriverResponseDTO {
   private Coordinate location;
   private DriverStatus status;
   private Integer maxCapacity;
+  private java.math.BigDecimal costPerHour;
 
   public static DriverResponseDTO fromEntity(Driver driver) {
     if (driver == null)
@@ -26,6 +27,7 @@ public class DriverResponseDTO {
     dto.setLocation(driver.getLocation());
     dto.setStatus(driver.getStatus());
     dto.setMaxCapacity(driver.getMaxCapacity());
+    dto.setCostPerHour(driver.getCostPerHour());
     return dto;
   }
 
@@ -83,5 +85,13 @@ public class DriverResponseDTO {
 
   public void setMaxCapacity(Integer maxCapacity) {
     this.maxCapacity = maxCapacity;
+  }
+
+  public java.math.BigDecimal getCostPerHour() {
+    return costPerHour;
+  }
+
+  public void setCostPerHour(java.math.BigDecimal costPerHour) {
+    this.costPerHour = costPerHour;
   }
 }

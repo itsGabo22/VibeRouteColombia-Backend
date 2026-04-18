@@ -22,13 +22,56 @@ import java.util.Map;
 public class AnalyticsService {
 
     private final OrderRepository orderRepository;
+    private final com.routeoptimizer.repository.RouteRepository routeRepository;
+    private final com.routeoptimizer.repository.DriverRepository driverRepository;
 
-    public AnalyticsService(OrderRepository orderRepository) {
+    public AnalyticsService(OrderRepository orderRepository,
+                            com.routeoptimizer.repository.RouteRepository routeRepository,
+                            com.routeoptimizer.repository.DriverRepository driverRepository) {
         this.orderRepository = orderRepository;
+        this.routeRepository = routeRepository;
+        this.driverRepository = driverRepository;
     }
 
     /**
-     * Calcula las entregas exitosas comparando diferentes periodos de tiempo.
+     * Calculates financial metrics: Revenue, Costs, and Net Profit.
+     */
+    @Transactional(readOnly = true)
+    public com.routeoptimizer.dto.FinancialAnalyticsDTO getFinancialAnalytics() {
+        java.math.BigDecimal revenue = orderRepository.getTotalRevenue();
+        if (revenue == null) revenue = java.math.BigDecimal.ZERO;
+
+        java.math.BigDecimal totalCosts = java.math.BigDecimal.ZERO;
+        List<com.routeoptimizer.model.entity.Route> routes = routeRepository.findAll();
+
+        for (com.routeoptimizer.model.entity.Route route : routes) {
+            if (route.getDriverId() != null) {
+                java.util.Optional<com.routeoptimizer.model.entity.Driver> driverOpt = driverRepository.findById(route.getDriverId());
+                if (driverOpt.isPresent() && driverOpt.get().getCostPerHour() != null) {
+                    double hours = route.getEstimatedTimeSeconds() / 3600.0;
+                    java.math.BigDecimal routeCost = driverOpt.get().getCostPerHour().multiply(java.math.BigDecimal.valueOf(hours));
+                    totalCosts = totalCosts.add(routeCost);
+                }
+            }
+        }
+
+        java.math.BigDecimal netProfit = revenue.subtract(totalCosts);
+        double margin = revenue.compareTo(java.math.BigDecimal.ZERO) > 0 
+            ? netProfit.divide(revenue, 4, java.math.RoundingMode.HALF_UP).doubleValue() * 100 
+            : 0;
+
+        Map<String, java.math.BigDecimal> byCity = new HashMap<>();
+        String[] cities = {"Bogotá", "Medellín", "Cali", "Pasto"};
+        for (String city : cities) {
+            java.math.BigDecimal cityRev = orderRepository.getRevenueByCity(city);
+            byCity.put(city, cityRev != null ? cityRev : java.math.BigDecimal.ZERO);
+        }
+
+        return new com.routeoptimizer.dto.FinancialAnalyticsDTO(revenue, totalCosts, netProfit, byCity, margin);
+    }
+
+    /**
+     * Calculates successful deliveries comparing different time periods.
      */
     @Transactional(readOnly = true)
     public DeliveryStatisticsDTO getDeliveryStatistics() {

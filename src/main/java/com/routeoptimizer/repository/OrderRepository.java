@@ -54,4 +54,10 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                         "ORDER BY COUNT(o) DESC")
         List<com.routeoptimizer.dto.DriverRankingDTO> getDriverRankings(
                         org.springframework.data.domain.Pageable pageable);
+
+        @Query("SELECT SUM(o.price) FROM Order o WHERE o.status = com.routeoptimizer.model.enums.OrderStatus.DELIVERED")
+        java.math.BigDecimal getTotalRevenue();
+
+        @Query("SELECT SUM(o.price) FROM Order o WHERE o.status = com.routeoptimizer.model.enums.OrderStatus.DELIVERED AND o.city = :city")
+        java.math.BigDecimal getRevenueByCity(@Param("city") String city);
 }

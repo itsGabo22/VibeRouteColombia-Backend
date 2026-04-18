@@ -52,4 +52,10 @@ public class BatchController {
     public ResponseEntity<List<Batch>> getPendingBatches() {
         return ResponseEntity.ok(batchService.getPendingBatches());
     }
+
+    @org.springframework.web.bind.annotation.PatchMapping("/{id}/manifest")
+    public ResponseEntity<Batch> updateManifest(@PathVariable Long id, @org.springframework.web.bind.annotation.RequestBody Map<String, String> body) {
+        String manifestUrl = body.get("manifestUrl");
+        return ResponseEntity.ok(batchService.updateManifestUrl(id, manifestUrl));
+    }
 }
