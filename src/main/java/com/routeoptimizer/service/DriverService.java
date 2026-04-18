@@ -37,6 +37,7 @@ public class DriverService {
     driver.setRole(Role.DRIVER);
 
     driver.setMaxCapacity(dto.getMaxCapacity());
+    driver.setCostPerHour(dto.getCostPerHour());
     driver.setStatus(DriverStatus.INACTIVE);
 
     return driverRepository.save(driver);

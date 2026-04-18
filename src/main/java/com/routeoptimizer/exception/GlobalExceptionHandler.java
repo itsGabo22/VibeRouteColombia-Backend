@@ -16,6 +16,13 @@ public class GlobalExceptionHandler {
         .body(Map.of("error", e.getMessage()));
   }
 
+  @ExceptionHandler(org.springframework.security.core.AuthenticationException.class)
+  public ResponseEntity<?> handleAuthenticationException(org.springframework.security.core.AuthenticationException e) {
+    return ResponseEntity
+        .status(HttpStatus.UNAUTHORIZED)
+        .body(Map.of("error", "Credenciales incorrectas", "message", e.getMessage()));
+  }
+
   @ExceptionHandler(Exception.class)
   public ResponseEntity<?> handleGeneralException(Exception e) {
     return ResponseEntity

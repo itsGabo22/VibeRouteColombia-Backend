@@ -14,6 +14,7 @@ public class OrderCreateDTO {
   private LocalTime timeWindowStart;
   private LocalTime timeWindowEnd;
   private String clientReference;
+  private java.math.BigDecimal price;
 
   // Getters and Setters
   public String getAddress() {
@@ -70,5 +71,13 @@ public class OrderCreateDTO {
 
   public void setClientReference(String clientReference) {
     this.clientReference = clientReference;
+  }
+
+  public java.math.BigDecimal getPrice() {
+    return price;
+  }
+
+  public void setPrice(java.math.BigDecimal price) {
+    this.price = price;
   }
 }

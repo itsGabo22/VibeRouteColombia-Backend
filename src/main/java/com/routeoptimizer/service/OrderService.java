@@ -45,6 +45,7 @@ public class OrderService {
     order.setTimeWindowStart(dto.getTimeWindowStart());
     order.setTimeWindowEnd(dto.getTimeWindowEnd());
     order.setClientReference(dto.getClientReference());
+    order.setPrice(dto.getPrice());
 
     order.setStatus(OrderStatus.PENDING);
     order.setDate(LocalDate.now());

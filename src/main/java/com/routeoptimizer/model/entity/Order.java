@@ -72,6 +72,9 @@ public class Order {
   @Column(name = "non_delivery_reason")
   private String nonDeliveryReason;
 
+  @Column(precision = 10, scale = 2)
+  private java.math.BigDecimal price;
+
   public Order() {
   }
 
@@ -217,5 +220,13 @@ public class Order {
 
   public void setNonDeliveryReason(String nonDeliveryReason) {
     this.nonDeliveryReason = nonDeliveryReason;
+  }
+
+  public java.math.BigDecimal getPrice() {
+    return price;
+  }
+
+  public void setPrice(java.math.BigDecimal price) {
+    this.price = price;
   }
 }
