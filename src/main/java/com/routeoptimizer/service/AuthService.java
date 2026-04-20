@@ -1,5 +1,7 @@
 package com.routeoptimizer.service;
 
+import java.util.Base64;
+
 import com.routeoptimizer.model.entity.Driver;
 import com.routeoptimizer.dto.AuthenticationResponse;
 import com.routeoptimizer.dto.LoginRequest;
@@ -46,12 +48,14 @@ public class AuthService {
       throw new RuntimeException("Ya existe un usuario registrado con el email: " + request.email());
     }
 
+    String decodedPassword = decodePassword(request.password());
+
     User user;
     if (request.role() == Role.DRIVER) {
       Driver rep = new Driver();
       rep.setName(request.name());
       rep.setEmail(request.email());
-      rep.setPasswordHash(passwordEncoder.encode(request.password()));
+      rep.setPasswordHash(passwordEncoder.encode(decodedPassword));
       rep.setPhone(request.phone());
       rep.setRole(request.role());
       rep.setStatus(DriverStatus.AVAILABLE);
@@ -62,7 +66,7 @@ public class AuthService {
       user = new User();
       user.setName(request.name());
       user.setEmail(request.email());
-      user.setPasswordHash(passwordEncoder.encode(request.password()));
+      user.setPasswordHash(passwordEncoder.encode(decodedPassword));
       user.setPhone(request.phone());
       user.setRole(request.role());
       user = userRepository.save(user);
@@ -76,15 +80,26 @@ public class AuthService {
 
   @Transactional
   public AuthenticationResponse login(LoginRequest request) {
+    String decodedPassword = decodePassword(request.password());
+
     authenticationManager.authenticate(
         new UsernamePasswordAuthenticationToken(
             request.email(),
-            request.password()));
+            decodedPassword));
     var user = userRepository.findByEmail(request.email())
         .orElseThrow();
     var jwtToken = jwtService.generateToken(user);
     UserResponseDTO userDto = new UserResponseDTO(user.getId(), user.getEmail(), user.getName(), user.getPhone(),
         user.getRole());
     return new AuthenticationResponse(jwtToken, userDto);
+  }
+
+  private String decodePassword(String encodedPassword) {
+    try {
+      return new String(Base64.getDecoder().decode(encodedPassword));
+    } catch (Exception e) {
+      // Si no es Base64 válido, devolvemos el original (para retrocompatibilidad o pruebas manuales)
+      return encodedPassword;
+    }
   }
 }

@@ -41,6 +41,9 @@ public class User implements UserDetails {
   @Column(nullable = false)
   private Role role;
 
+  @Column(name = "assigned_city")
+  private String assignedCity;
+
   public User() {
   }
 
@@ -127,5 +130,13 @@ public class User implements UserDetails {
 
   public void setRole(Role role) {
     this.role = role;
+  }
+
+  public String getAssignedCity() {
+    return assignedCity;
+  }
+
+  public void setAssignedCity(String assignedCity) {
+    this.assignedCity = assignedCity;
   }
 }

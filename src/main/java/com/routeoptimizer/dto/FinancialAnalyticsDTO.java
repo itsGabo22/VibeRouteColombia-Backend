@@ -8,5 +8,6 @@ public record FinancialAnalyticsDTO(
     BigDecimal operationalCosts,
     BigDecimal netProfit,
     Map<String, BigDecimal> revenueByCity,
+    Map<String, BigDecimal> monthlyRevenue,
     double profitMarginPercentage
 ) {}

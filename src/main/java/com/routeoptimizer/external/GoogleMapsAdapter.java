@@ -143,6 +143,20 @@ public class GoogleMapsAdapter implements MapService {
     long[][] matrix = new long[n][n];
 
     if (apiKey == null || apiKey.isEmpty() || n <= 1) {
+      log.warn("Google Maps API Key not detected. Calculating Euclidean distances for optimization.");
+      for (int i = 0; i < n; i++) {
+        for (int j = 0; j < n; j++) {
+          if (i == j) {
+            matrix[i][j] = 0;
+          } else {
+            Coordinate p1 = points.get(i);
+            Coordinate p2 = points.get(j);
+            // Simple Euclidean distance (approximate meters)
+            double d = Math.sqrt(Math.pow(p1.getLat() - p2.getLat(), 2) + Math.pow(p1.getLng() - p2.getLng(), 2)) * 111320;
+            matrix[i][j] = (long) d;
+          }
+        }
+      }
       return matrix;
     }
 
@@ -183,6 +197,39 @@ public class GoogleMapsAdapter implements MapService {
     }
 
     return matrix;
+  }
+
+  @Override
+  public String getDirections(Coordinate origin, Coordinate destination, List<Coordinate> waypoints) {
+    if (apiKey == null || apiKey.isEmpty())
+      return null;
+
+    UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl("https://maps.googleapis.com/maps/api/directions/json")
+        .queryParam("origin", origin.getLat() + "," + origin.getLng())
+        .queryParam("destination", destination.getLat() + "," + destination.getLng())
+        .queryParam("key", apiKey);
+
+    if (waypoints != null && !waypoints.isEmpty()) {
+      StringBuilder sb = new StringBuilder();
+      // Google standard limit is 25 waypoints (23 intermediate + origin + dest)
+      int limit = Math.min(waypoints.size(), 23);
+      for (int i = 0; i < limit; i++) {
+        sb.append(waypoints.get(i).getLat()).append(",").append(waypoints.get(i).getLng());
+        if (i < limit - 1)
+          sb.append("|");
+      }
+      builder.queryParam("waypoints", sb.toString());
+    }
+
+    try {
+      JsonNode response = restTemplate.getForObject(builder.build().encode().toUriString(), JsonNode.class);
+      if (response != null && "OK".equals(response.path("status").asText())) {
+        return response.path("routes").get(0).path("overview_polyline").path("points").asText();
+      }
+    } catch (Exception e) {
+      log.error("Error in Directions API: {}", e.getMessage());
+    }
+    return null;
   }
 
   @Override

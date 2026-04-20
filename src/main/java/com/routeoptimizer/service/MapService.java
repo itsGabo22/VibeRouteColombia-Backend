@@ -31,6 +31,11 @@ public interface MapService {
   long[][] getDistanceMatrix(List<Coordinate> points);
 
   /**
+   * Gets the detailed directions (polyline) between origin, destination and waypoints.
+   */
+  String getDirections(Coordinate origin, Coordinate destination, List<Coordinate> waypoints);
+
+  /**
    * Gets a traffic factor (0.0 to 1.0) for a specific city.
    */
   Double getTrafficFactor(String city);

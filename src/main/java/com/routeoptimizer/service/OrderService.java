@@ -66,9 +66,7 @@ public class OrderService {
     order.setCity(dto.getCity());
 
     Order savedOrder = orderRepository.save(order);
-
-    batchService.addOrderToActiveBatch(savedOrder);
-
+    // batchService.addOrderToActiveBatch(savedOrder); // Deshabilitado para permitir consolidación manual por Logística
     return savedOrder;
   }
 
@@ -85,7 +83,10 @@ public class OrderService {
   }
 
   @Transactional(readOnly = true)
-  public List<Order> findPendingWithoutBatch() {
+  public List<Order> findPendingWithoutBatch(String city) {
+    if (city != null && !city.isEmpty()) {
+       return orderRepository.findByBatchIdIsNullAndCity(city);
+    }
     return orderRepository.findByBatchIdIsNull();
   }
 
@@ -125,9 +126,24 @@ public class OrderService {
   }
 
   @Transactional
-  public List<Order> createOrdersBulk(List<OrderCreateDTO> dtos) {
-    return dtos.stream()
-        .map(this::createOrder)
-        .collect(Collectors.toList());
+  public Map<String, Object> createOrdersBulk(List<OrderCreateDTO> dtos) {
+    List<Order> created = new java.util.ArrayList<>();
+    List<Map<String, String>> errors = new java.util.ArrayList<>();
+
+    for (int i = 0; i < dtos.size(); i++) {
+      OrderCreateDTO dto = dtos.get(i);
+      try {
+        created.add(createOrder(dto));
+      } catch (RuntimeException e) {
+        String ref = dto.getClientReference() != null ? dto.getClientReference() : "index-" + i;
+        errors.add(Map.of("reference", ref, "error", e.getMessage()));
+      }
+    }
+
+    return Map.of(
+        "created", created,
+        "createdCount", created.size(),
+        "errorCount", errors.size(),
+        "errors", errors);
   }
 }

@@ -57,13 +57,21 @@ public class RouteOptimizer {
       return new Route.Builder().forBatch(batchId).build();
     }
 
-    // Definir punto de partida (Ubicación del repartidor o el almacén)
+    // Definir punto de partida dinámico (Ubicación del repartidor o el centro de la ciudad)
     Coordinate startLocation;
     if (batch.getDriver() != null && batch.getDriver().getLocation() != null) {
       startLocation = batch.getDriver().getLocation();
     } else {
-      // Ubicación base por defecto (ej. Un almacén en Bogotá)
-      startLocation = new Coordinate(4.6097, -74.0817);
+      // Ubicación base por defecto según la ciudad del lote
+      if ("Pasto".equalsIgnoreCase(batch.getCity())) {
+        startLocation = new Coordinate(1.2136, -77.2811); // Centro de Pasto
+      } else if ("Bogotá".equalsIgnoreCase(batch.getCity()) || "Bogota".equalsIgnoreCase(batch.getCity())) {
+        startLocation = new Coordinate(4.6097, -74.0817); // Centro de Bogotá
+      } else if ("Medellín".equalsIgnoreCase(batch.getCity()) || "Medellin".equalsIgnoreCase(batch.getCity())) {
+        startLocation = new Coordinate(6.2442, -75.5812); // Centro de Medellín
+      } else {
+        startLocation = new Coordinate(4.6097, -74.0817); // Global default
+      }
     }
 
     // 1. Ejecutar el motor de optimización (Estrategia)

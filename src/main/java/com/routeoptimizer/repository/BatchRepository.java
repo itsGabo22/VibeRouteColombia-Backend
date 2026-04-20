@@ -17,7 +17,9 @@ public interface BatchRepository extends JpaRepository<Batch, Long> {
 
     List<Batch> findByCreationDate(LocalDate date);
 
-    Optional<Batch> findFirstByStatusOrderByCreationDateAsc(String status);
+    Optional<Batch> findFirstByStatusAndCityOrderByCreationDateAsc(String status, String city);
+
+    List<Batch> findByCityAndDriverIsNullOrderByCreationDateAsc(String city);
 
     List<Batch> findByDriverIsNullOrderByCreationDateAsc();
 

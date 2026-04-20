@@ -49,13 +49,26 @@ public class BatchController {
     }
 
     @GetMapping("/pending")
-    public ResponseEntity<List<Batch>> getPendingBatches() {
-        return ResponseEntity.ok(batchService.getPendingBatches());
+    public ResponseEntity<List<Batch>> getPendingBatches(@org.springframework.web.bind.annotation.RequestParam(required = false) String city) {
+        return ResponseEntity.ok(batchService.getPendingBatches(city));
     }
 
     @org.springframework.web.bind.annotation.PatchMapping("/{id}/manifest")
     public ResponseEntity<Batch> updateManifest(@PathVariable Long id, @org.springframework.web.bind.annotation.RequestBody Map<String, String> body) {
         String manifestUrl = body.get("manifestUrl");
         return ResponseEntity.ok(batchService.updateManifestUrl(id, manifestUrl));
+    }
+
+    @PostMapping("/manual")
+    public ResponseEntity<Batch> createManualBatch(@org.springframework.web.bind.annotation.RequestBody Map<String, Object> body) {
+        List<Integer> idsRaw = (List<Integer>) body.get("orderIds");
+        List<Long> orderIds = idsRaw.stream().map(Integer::longValue).collect(java.util.stream.Collectors.toList());
+        String city = (String) body.get("city");
+        return ResponseEntity.ok(batchService.createManualBatch(orderIds, city));
+    }
+
+    @PostMapping("/{batchId}/assign-driver/{driverId}")
+    public ResponseEntity<Batch> assignDriverToBatch(@PathVariable Long batchId, @PathVariable Long driverId) {
+        return ResponseEntity.ok(batchService.assignDriverToBatch(batchId, driverId));
     }
 }

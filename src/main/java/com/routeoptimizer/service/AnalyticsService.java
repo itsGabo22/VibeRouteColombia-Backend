@@ -37,8 +37,14 @@ public class AnalyticsService {
      * Calculates financial metrics: Revenue, Costs, and Net Profit.
      */
     @Transactional(readOnly = true)
-    public com.routeoptimizer.dto.FinancialAnalyticsDTO getFinancialAnalytics() {
-        java.math.BigDecimal revenue = orderRepository.getTotalRevenue();
+    public com.routeoptimizer.dto.FinancialAnalyticsDTO getFinancialAnalytics(String cityFilter) {
+        java.math.BigDecimal revenue;
+        if (cityFilter != null && !cityFilter.isEmpty()) {
+            revenue = orderRepository.getRevenueByCity(cityFilter);
+        } else {
+            revenue = orderRepository.getTotalRevenue();
+        }
+        
         if (revenue == null) revenue = java.math.BigDecimal.ZERO;
 
         java.math.BigDecimal totalCosts = java.math.BigDecimal.ZERO;
@@ -47,10 +53,17 @@ public class AnalyticsService {
         for (com.routeoptimizer.model.entity.Route route : routes) {
             if (route.getDriverId() != null) {
                 java.util.Optional<com.routeoptimizer.model.entity.Driver> driverOpt = driverRepository.findById(route.getDriverId());
-                if (driverOpt.isPresent() && driverOpt.get().getCostPerHour() != null) {
-                    double hours = route.getEstimatedTimeSeconds() / 3600.0;
-                    java.math.BigDecimal routeCost = driverOpt.get().getCostPerHour().multiply(java.math.BigDecimal.valueOf(hours));
-                    totalCosts = totalCosts.add(routeCost);
+                if (driverOpt.isPresent()) {
+                    com.routeoptimizer.model.entity.Driver d = driverOpt.get();
+                    // Si hay filtro de ciudad, solo sumamos costos de conductores de esa ciudad
+                    if (cityFilter != null && !cityFilter.isEmpty() && !cityFilter.equalsIgnoreCase(d.getAssignedCity())) {
+                        continue;
+                    }
+                    if (d.getCostPerHour() != null) {
+                        double hours = route.getEstimatedTimeSeconds() / 3600.0;
+                        java.math.BigDecimal routeCost = d.getCostPerHour().multiply(java.math.BigDecimal.valueOf(hours));
+                        totalCosts = totalCosts.add(routeCost);
+                    }
                 }
             }
         }
@@ -67,7 +80,21 @@ public class AnalyticsService {
             byCity.put(city, cityRev != null ? cityRev : java.math.BigDecimal.ZERO);
         }
 
-        return new com.routeoptimizer.dto.FinancialAnalyticsDTO(revenue, totalCosts, netProfit, byCity, margin);
+        Map<String, java.math.BigDecimal> monthlyRevenue = new HashMap<>();
+        List<Object[]> monthlyData = orderRepository.getMonthlyRevenueNative(cityFilter);
+        for (Object[] row : monthlyData) {
+            String month = (String) row[0];
+            Object rawTotal = row[1];
+            java.math.BigDecimal total = java.math.BigDecimal.ZERO;
+            if (rawTotal instanceof java.math.BigDecimal) {
+                total = (java.math.BigDecimal) rawTotal;
+            } else if (rawTotal instanceof Number) {
+                total = java.math.BigDecimal.valueOf(((Number) rawTotal).doubleValue());
+            }
+            monthlyRevenue.put(month.trim(), total);
+        }
+
+        return new com.routeoptimizer.dto.FinancialAnalyticsDTO(revenue, totalCosts, netProfit, byCity, monthlyRevenue, margin);
     }
 
     /**

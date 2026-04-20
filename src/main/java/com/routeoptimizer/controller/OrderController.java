@@ -44,8 +44,8 @@ public class OrderController {
   }
 
   @GetMapping("/pending")
-  public ResponseEntity<List<OrderResponseDTO>> listPendingWithoutBatch() {
-    List<OrderResponseDTO> orders = orderService.findPendingWithoutBatch().stream()
+  public ResponseEntity<List<OrderResponseDTO>> listPendingWithoutBatch(@RequestParam(required = false) String city) {
+    List<OrderResponseDTO> orders = orderService.findPendingWithoutBatch(city).stream()
         .map(OrderResponseDTO::fromEntity)
         .collect(Collectors.toList());
     return ResponseEntity.ok(orders);
@@ -88,10 +88,14 @@ public class OrderController {
   @PostMapping("/bulk")
   public ResponseEntity<?> createOrdersBulk(@RequestBody List<OrderCreateDTO> dtos) {
     try {
-      List<OrderResponseDTO> orders = orderService.createOrdersBulk(dtos).stream()
-          .map(OrderResponseDTO::fromEntity)
-          .collect(Collectors.toList());
-      return ResponseEntity.status(HttpStatus.CREATED).body(orders);
+      Map<String, Object> result = orderService.createOrdersBulk(dtos);
+      int createdCount = (int) result.get("createdCount");
+
+      if (createdCount == 0) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(result);
+      }
+
+      return ResponseEntity.status(HttpStatus.CREATED).body(result);
     } catch (RuntimeException e) {
       return ResponseEntity.status(HttpStatus.BAD_REQUEST)
           .body(Map.of("error", e.getMessage()));
