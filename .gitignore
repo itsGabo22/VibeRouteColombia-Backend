@@ -1,0 +1,16 @@
+target/
+!.gitkeep
+*.class
+.settings/
+.classpath
+.project
+.factorypath
+.idea/
+*.iml
+.vscode/
+bin/
+logs/
+*.log
+temp/
+tmp/
+serviceAccountKey.json
