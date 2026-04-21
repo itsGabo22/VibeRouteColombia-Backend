@@ -1,70 +1,78 @@
 package com.routeoptimizer.config;
 
-import jakarta.annotation.PostConstruct;
+import com.routeoptimizer.model.entity.User;
+import com.routeoptimizer.model.enums.Role;
+import com.routeoptimizer.repository.UserRepository;
+import org.springframework.boot.CommandLineRunner;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Genera automáticamente los perfiles de prueba de Pasto al iniciar la aplicación.
- * Se ejecuta después de que Hibernate ha verificado el esquema.
+ * Sincronizador Maestro de Usuarios y Esquema.
+ * Forzado para ejecutarse al final del arranque de la aplicación.
+ * Repara la base de datos eliminando restricciones antiguas que bloquean el Super Admin.
  */
 @Component
-public class UserSeeder {
+public class UserSeeder implements CommandLineRunner {
 
-    private final JdbcTemplate jdbcTemplate;
+    private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final JdbcTemplate jdbcTemplate;
 
-    public UserSeeder(JdbcTemplate jdbcTemplate, PasswordEncoder passwordEncoder) {
-        this.jdbcTemplate = jdbcTemplate;
+    public UserSeeder(UserRepository userRepository, PasswordEncoder passwordEncoder, JdbcTemplate jdbcTemplate) {
+        this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.jdbcTemplate = jdbcTemplate;
     }
 
-    @PostConstruct
-    public void seedUsers() {
+    @Override
+    @Transactional
+    public void run(String... args) {
         try {
-            // Verificar si hay usuarios para evitar duplicados
-            Integer count = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM users", Integer.class);
+            System.out.println("\n\n" + "=".repeat(60));
+            System.out.println("🧙 [SYSTEM] INICIANDO REPARACIÓN DE ESQUEMA Y ROLES");
+            System.out.println("=".repeat(60));
 
-            if (count != null && count == 0) {
-                System.out.println("👤 USER SEED: Iniciando creación de perfiles VibeRoute...");
-
-                String hashedPass = passwordEncoder.encode("123");
-
-                // 1. Admin Central
-                jdbcTemplate.update(
-                    "INSERT INTO users (email, password_hash, name, role, assigned_city) VALUES (?, ?, ?, ?, ?)",
-                    "admin@viberoute.com", hashedPass, "Admin Central VibeRoute", "ADMIN", "BOGOTA"
-                );
-
-                // 2. Operador Logística Pasto
-                jdbcTemplate.update(
-                    "INSERT INTO users (email, password_hash, name, role, assigned_city) VALUES (?, ?, ?, ?, ?)",
-                    "logistica.pasto@viberoute.com", hashedPass, "Operador Logística Pasto", "LOGISTICS", "Pasto"
-                );
-
-                // 3. Conductor Pasto (User part)
-                jdbcTemplate.update(
-                    "INSERT INTO users (email, password_hash, name, role, assigned_city) VALUES (?, ?, ?, ?, ?)",
-                    "jose.pasto@viberoute.com", hashedPass, "José Cuarán (Pasto)", "DRIVER", "Pasto"
-                );
-
-                // 4. Conductor Pasto (Driver identity part)
-                Long driverId = jdbcTemplate.queryForObject(
-                    "SELECT id FROM users WHERE email = 'jose.pasto@viberoute.com'", Long.class
-                );
-                
-                if (driverId != null) {
-                    jdbcTemplate.update(
-                        "INSERT INTO drivers (id, status, max_capacity, cost_per_hour, lat, lng) VALUES (?, ?, ?, ?, ?, ?)",
-                        driverId, "AVAILABLE", 500, new java.math.BigDecimal("15000.00"), 1.2136, -77.2811
-                    );
-                }
-
-                System.out.println("✅ DONE: Perfiles de Admin, Logística y Conductor listos en Pasto.");
+            // PASO 1: Eliminar restricción de base de datos que bloquea SUPER_ADMIN (PostgreSQL fix)
+            try {
+                jdbcTemplate.execute("ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check");
+                System.out.println("🔨 [DATABASE] Restricción de roles eliminada con éxito.");
+            } catch (Exception sqlEx) {
+                System.out.println("⚠️ [DATABASE] No se pudo eliminar la restricción (puede que no exista): " + sqlEx.getMessage());
             }
+
+            // PASO 2: Sincronizar el Super Admin
+            String masterEmail = "superadmin@viberoute.com";
+            String hashedMasterPass = passwordEncoder.encode("viberoute_master");
+
+            userRepository.findByEmail(masterEmail).ifPresentOrElse(
+                user -> {
+                    user.setRole(Role.SUPER_ADMIN);
+                    user.setPasswordHash(hashedMasterPass);
+                    user.setName("Arquitecto Maestro (VibeRoute)");
+                    user.setAssignedCity("Global");
+                    userRepository.save(user);
+                    System.out.println("✅ [SYNC] Usuario '" + masterEmail + "' ACTUALIZADO a SUPER_ADMIN.");
+                },
+                () -> {
+                    User newUser = new User();
+                    newUser.setEmail(masterEmail);
+                    newUser.setPasswordHash(hashedMasterPass);
+                    newUser.setName("Arquitecto Maestro (VibeRoute)");
+                    newUser.setRole(Role.SUPER_ADMIN);
+                    newUser.setAssignedCity("Global");
+                    userRepository.save(newUser);
+                    System.out.println("✨ [SYNC] Usuario '" + masterEmail + "' CREADO como SUPER_ADMIN.");
+                }
+            );
+
+            System.out.println("=".repeat(60) + "\n\n");
+
         } catch (Exception e) {
-            System.err.println("⚠️ Warning: No se pudieron precargar los usuarios: " + e.getMessage());
+            System.err.println("❌ ERROR CRÍTICO EN SEEDER: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 }

@@ -3,6 +3,7 @@ package com.routeoptimizer.controller;
 import com.routeoptimizer.dto.AuthenticationResponse;
 import com.routeoptimizer.dto.LoginRequest;
 import com.routeoptimizer.dto.RegisterRequest;
+import com.routeoptimizer.dto.PasswordResetRequest;
 import com.routeoptimizer.service.AuthService;
 
 import org.springframework.http.ResponseEntity;
@@ -38,5 +39,14 @@ public class AuthController {
   @PostMapping("/login")
   public ResponseEntity<AuthenticationResponse> login(@RequestBody LoginRequest request) {
     return ResponseEntity.ok(authService.login(request));
+  }
+
+  /**
+   * Endpoint para restablecer la contraseña validando el correo y el número de teléfono.
+   */
+  @PostMapping("/reset-password")
+  public ResponseEntity<java.util.Map<String, String>> resetPassword(@jakarta.validation.Valid @RequestBody PasswordResetRequest request) {
+    authService.resetPassword(request);
+    return ResponseEntity.ok(java.util.Map.of("message", "Contraseña restablecida con éxito"));
   }
 }

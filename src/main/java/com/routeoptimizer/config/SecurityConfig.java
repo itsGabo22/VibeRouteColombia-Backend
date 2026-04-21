@@ -43,25 +43,26 @@ public class SecurityConfig {
         .cors(cors -> cors.configurationSource(corsConfigurationSource()))
         .csrf(AbstractHttpConfigurer::disable)
         .authorizeHttpRequests(auth -> auth
-            .requestMatchers("/api/v1/auth/login", "/api/v1/ping", "/error", "/ws-alertas/**").permitAll()
-            .requestMatchers("/api/v1/auth/register").hasAnyRole("ADMIN", "LOGISTICS")
+            .requestMatchers("/api/v1/auth/login", "/api/v1/auth/reset-password", "/api/v1/ping", "/error", "/ws-alertas/**").permitAll()
+            .requestMatchers("/api/v1/auth/register").hasAnyRole("SUPER_ADMIN", "ADMIN", "LOGISTICS")
+            .requestMatchers("/api/v1/system/**").hasRole("SUPER_ADMIN")
             
             // Specific DRIVER actions
-            .requestMatchers(HttpMethod.PATCH, "/api/v1/drivers/*/status").hasAnyRole("DRIVER", "ADMIN")
-            .requestMatchers(HttpMethod.PATCH, "/api/v1/orders/*/status").hasAnyRole("DRIVER", "LOGISTICS", "ADMIN")
+            .requestMatchers(HttpMethod.PATCH, "/api/v1/drivers/*/status").hasAnyRole("DRIVER", "ADMIN", "SUPER_ADMIN")
+            .requestMatchers(HttpMethod.PATCH, "/api/v1/orders/*/status").hasAnyRole("DRIVER", "LOGISTICS", "ADMIN", "SUPER_ADMIN")
             
             // Shared Driver management
-            .requestMatchers("/api/v1/drivers", "/api/v1/drivers/**").hasAnyRole("ADMIN", "LOGISTICS")
+            .requestMatchers("/api/v1/drivers", "/api/v1/drivers/**").hasAnyRole("ADMIN", "LOGISTICS", "SUPER_ADMIN")
             
             // Shared Logistics/Admin access
             .requestMatchers("/api/v1/orders", "/api/v1/orders/**", 
                              "/api/v1/stats", "/api/v1/stats/**",
-                             "/api/v1/reports", "/api/v1/reports/**").hasAnyRole("LOGISTICS", "ADMIN")
+                             "/api/v1/reports", "/api/v1/reports/**").hasAnyRole("LOGISTICS", "ADMIN", "SUPER_ADMIN")
             
             // Shared access for operational monitoring (Drivers need batches and routes)
             .requestMatchers("/api/v1/batches", "/api/v1/batches/**",
                              "/api/v1/routes", "/api/v1/routes/**", 
-                             "/api/v1/locations", "/api/v1/locations/**").hasAnyRole("DRIVER", "LOGISTICS", "ADMIN")
+                             "/api/v1/locations", "/api/v1/locations/**").hasAnyRole("DRIVER", "LOGISTICS", "ADMIN", "SUPER_ADMIN")
             
             .requestMatchers("/api/v1/ai/**").authenticated()
             .anyRequest().authenticated())

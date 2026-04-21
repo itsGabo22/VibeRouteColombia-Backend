@@ -23,5 +23,7 @@ public record RegisterRequest(
         @NotNull(message = "El rol es obligatorio")
         com.routeoptimizer.model.enums.Role role,
 
+        String assignedCity,
+
         java.math.BigDecimal costPerHour) {
 }
