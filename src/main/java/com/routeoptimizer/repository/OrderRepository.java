@@ -30,6 +30,9 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
         List<Order> findByBatchIdIsNull();
 
+        @Query("SELECT o FROM Order o WHERE o.batchId IS NULL AND o.city = :city")
+        List<Order> findByBatchIdIsNullAndCity(@Param("city") String city);
+
         @Query(value = "SELECT * FROM orders o WHERE ST_DWithin(" +
                         "CAST(ST_SetSRID(ST_MakePoint(o.lng, o.lat), 4326) AS geography), " + // Wait, should it
                                                                                               // correspond to lng
@@ -60,4 +63,10 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
         @Query("SELECT SUM(o.price) FROM Order o WHERE o.status = com.routeoptimizer.model.enums.OrderStatus.DELIVERED AND o.city = :city")
         java.math.BigDecimal getRevenueByCity(@Param("city") String city);
+
+        @Query(value = "SELECT TRIM(TO_CHAR(o.actual_delivery_time, 'Month')) as month, COALESCE(SUM(o.price), 0) as total " +
+                   "FROM orders o WHERE o.status = 'DELIVERED' AND o.actual_delivery_time IS NOT NULL " +
+                   "AND (:city IS NULL OR o.city = :city) " +
+                   "GROUP BY month", nativeQuery = true)
+        List<Object[]> getMonthlyRevenueNative(@Param("city") String city);
 }

@@ -4,7 +4,9 @@ import com.routeoptimizer.model.Coordinate;
 import com.routeoptimizer.model.enums.Priority;
 
 import java.time.LocalTime;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class OrderCreateDTO {
 
   private String address;

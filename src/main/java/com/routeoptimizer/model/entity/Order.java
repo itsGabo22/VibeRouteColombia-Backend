@@ -60,6 +60,9 @@ public class Order {
   @Column(name = "delivery_order")
   private Integer deliveryOrder;
 
+  @Column(name = "route_id")
+  private Long routeId;
+
   @Column(name = "actual_delivery_time")
   private LocalDateTime actualDeliveryTime;
 
@@ -188,6 +191,14 @@ public class Order {
 
   public void setDeliveryOrder(Integer deliveryOrder) {
     this.deliveryOrder = deliveryOrder;
+  }
+
+  public Long getRouteId() {
+    return routeId;
+  }
+
+  public void setRouteId(Long routeId) {
+    this.routeId = routeId;
   }
 
   public LocalDateTime getActualDeliveryTime() {

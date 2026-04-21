@@ -34,4 +34,10 @@ public interface MapService {
    * Gets a traffic factor (0.0 to 1.0) for a specific city.
    */
   Double getTrafficFactor(String city);
+
+  /**
+   * Gets a polyline string representing the route between origin and destination, 
+   * passing through optional waypoints.
+   */
+  String getDirections(Coordinate origin, Coordinate destination, List<Coordinate> waypoints);
 }

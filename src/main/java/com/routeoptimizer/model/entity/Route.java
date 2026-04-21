@@ -32,6 +32,9 @@ public class Route {
   @Column(name = "creation_date")
   private LocalDateTime creationDate;
 
+  @Column(name = "encoded_polyline", length = 5000)
+  private String encodedPolyline;
+
   @OneToMany(fetch = FetchType.LAZY)
   @JoinColumn(name = "route_id")
   @OrderBy("deliveryOrder ASC")
@@ -56,6 +59,7 @@ public class Route {
     this.totalDistanceMeters = builder.totalDistanceMeters;
     this.estimatedTimeSeconds = builder.estimatedTimeSeconds;
     this.stops = builder.stops;
+    this.encodedPolyline = builder.encodedPolyline;
     this.creationDate = LocalDateTime.now();
   }
 
@@ -86,6 +90,10 @@ public class Route {
 
   public LocalDateTime getCreationDate() {
     return creationDate;
+  }
+
+  public String getEncodedPolyline() {
+    return encodedPolyline;
   }
 
   public Double getLastLatitude() {
@@ -121,9 +129,15 @@ public class Route {
     private List<Order> stops = new ArrayList<>();
     private long totalDistanceMeters;
     private long estimatedTimeSeconds;
+    private String encodedPolyline;
 
     public Builder forBatch(Long batchId) {
       this.batchId = batchId;
+      return this;
+    }
+
+    public Builder withEncodedPolyline(String polyline) {
+      this.encodedPolyline = polyline;
       return this;
     }
 

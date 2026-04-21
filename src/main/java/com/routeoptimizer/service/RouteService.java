@@ -1,8 +1,12 @@
 package com.routeoptimizer.service;
 
 import com.routeoptimizer.model.entity.Route;
+import com.routeoptimizer.model.entity.Order;
+import com.routeoptimizer.model.Coordinate;
 import com.routeoptimizer.optimization.RouteOptimizer;
 import com.routeoptimizer.repository.RouteRepository;
+import com.routeoptimizer.repository.OrderRepository;
+import com.routeoptimizer.service.MapService;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,22 +22,58 @@ public class RouteService {
 
   private final RouteRepository routeRepository;
   private final RouteOptimizer routeOptimizer;
+  private final MapService mapService;
+  private final OrderRepository orderRepository;
 
-  public RouteService(RouteRepository routeRepository, RouteOptimizer routeOptimizer) {
+  public RouteService(RouteRepository routeRepository, 
+                      RouteOptimizer routeOptimizer,
+                      MapService mapService,
+                      OrderRepository orderRepository) {
     this.routeRepository = routeRepository;
     this.routeOptimizer = routeOptimizer;
+    this.mapService = mapService;
+    this.orderRepository = orderRepository;
   }
 
   @Transactional
   public Route optimizeAndSaveRoute(Long batchId) {
     log.info("Starting optimization and persistence process for batch #{}", batchId);
 
-    Route newRoute = routeOptimizer.optimizeBatch(batchId);
+    Route optimizedResult = routeOptimizer.optimizeBatch(batchId);
+    
+    // Fetch detailed directions (encoded polyline) for the sequence
+    String encodedPolyline = null;
+    List<Order> stops = optimizedResult.getStops();
+    if (stops != null && stops.size() > 1) {
+       Coordinate origin = stops.get(0).getLocation(); 
+       Coordinate destination = stops.get(stops.size() - 1).getLocation();
+       List<Coordinate> waypoints = stops.size() > 2 
+          ? stops.subList(1, stops.size() - 1).stream().map(Order::getLocation).toList()
+          : null;
+       
+       encodedPolyline = mapService.getDirections(origin, destination, waypoints);
+    }
+
+    Route routeToSave = new Route.Builder()
+        .forBatch(batchId)
+        .withStops(stops)
+        .withTotalDistance(optimizedResult.getTotalDistanceMeters())
+        .withEncodedPolyline(encodedPolyline)
+        .build();
 
     @SuppressWarnings("null")
-    Route savedRoute = routeRepository.save(newRoute);
+    Route savedRoute = routeRepository.save(routeToSave);
+    
+    // Link orders to the saved route
+    if (stops != null) {
+        for (Order o : stops) {
+            o.setRouteId(savedRoute.getId());
+            orderRepository.save(o);
+        }
+    }
 
-    log.info("Route successfully persisted for batch #{}. Route ID: {}", batchId, savedRoute.getId());
+    log.info("Route successfully persisted for batch #{}. Route ID: {}. Polyline length: {}", 
+        batchId, savedRoute.getId(), encodedPolyline != null ? encodedPolyline.length() : 0);
 
     return savedRoute;
   }

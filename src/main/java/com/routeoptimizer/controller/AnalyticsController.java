@@ -15,7 +15,7 @@ import java.util.List;
  * Controlador para exponer las métricas y analíticas del sistema.
  */
 @RestController
-@RequestMapping("/api/v1/analytics")
+@RequestMapping("/api/v1/stats")
 public class AnalyticsController {
 
     private final AnalyticsService analyticsService;
@@ -44,7 +44,8 @@ public class AnalyticsController {
      * Gets the financial profitability summary (Revenue, Costs, Profit).
      */
     @GetMapping("/financial-summary")
-    public ResponseEntity<com.routeoptimizer.dto.FinancialAnalyticsDTO> getFinancialSummary() {
-        return ResponseEntity.ok(analyticsService.getFinancialAnalytics());
+    public ResponseEntity<com.routeoptimizer.dto.FinancialAnalyticsDTO> getFinancialSummary(
+            @org.springframework.web.bind.annotation.RequestParam(required = false) String city) {
+        return ResponseEntity.ok(analyticsService.getFinancialAnalytics(city));
     }
 }

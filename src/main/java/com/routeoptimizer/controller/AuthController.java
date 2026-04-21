@@ -28,7 +28,7 @@ public class AuthController {
    * Endpoint para registrar un nuevo usuario en el sistema.
    */
   @PostMapping("/register")
-  public ResponseEntity<AuthenticationResponse> register(@RequestBody RegisterRequest request) {
+  public ResponseEntity<AuthenticationResponse> register(@jakarta.validation.Valid @RequestBody RegisterRequest request) {
     return ResponseEntity.ok(authService.register(request));
   }
 

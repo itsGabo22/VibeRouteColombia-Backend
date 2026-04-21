@@ -23,6 +23,9 @@ public class Batch {
     @Column(nullable = false)
     private String status; // OPEN, ASSIGNED, FULL_UNASSIGNED
 
+    @Column(name = "city")
+    private String city;
+
     @OneToMany
     @JoinColumn(name = "batch_id", insertable = false, updatable = false)
     private List<Order> orders = new ArrayList<>();
@@ -93,5 +96,13 @@ public class Batch {
 
     public void setManifestUrl(String manifestUrl) {
         this.manifestUrl = manifestUrl;
+    }
+
+    public String getCity() {
+        return city;
+    }
+
+    public void setCity(String city) {
+        this.city = city;
     }
 }

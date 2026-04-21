@@ -43,18 +43,20 @@ public class BatchService {
 
     @Transactional
     public void addOrderToActiveBatch(Order order) {
-        Optional<Batch> openBatch = batchRepository.findFirstByStatusOrderByCreationDateAsc("OPEN");
+        String city = order.getCity() != null ? order.getCity() : "Global";
+        Optional<Batch> openBatch = batchRepository.findFirstByStatusAndCityOrderByCreationDateAsc("OPEN", city);
 
         Batch batch;
         if (openBatch.isPresent()) {
             batch = openBatch.get();
-            log.info("Order #{} added to existing batch #{} ({}/{} orders)",
-                    order.getId(), batch.getId(), batch.getOrders().size() + 1, MAX_ORDERS_PER_BATCH);
+            log.info("Order #{} added to existing batch #{} for city {} ({}/{} orders)",
+                    order.getId(), batch.getId(), city, batch.getOrders().size() + 1, MAX_ORDERS_PER_BATCH);
         } else {
             batch = new Batch();
             batch.setStatus("OPEN");
+            batch.setCity(city);
             batch = batchRepository.save(batch);
-            log.info("New batch #{} created for order #{}", batch.getId(), order.getId());
+            log.info("New batch #{} created for city {} with order #{}", batch.getId(), city, order.getId());
         }
 
         order.setBatchId(batch.getId());
@@ -97,7 +99,8 @@ public class BatchService {
 
     @Transactional
     public boolean assignAvailableDriverToOldestPendingBatch(Driver driver) {
-        List<Batch> pendingBatches = batchRepository.findByDriverIsNullOrderByCreationDateAsc();
+        String city = (driver.getAssignedCity() != null) ? driver.getAssignedCity() : "Global";
+        List<Batch> pendingBatches = batchRepository.findByCityAndDriverIsNullOrderByCreationDateAsc(city);
 
         if (pendingBatches.isEmpty()) {
             log.debug("No batches without driver to assign to '{}'", driver.getName());
@@ -109,6 +112,8 @@ public class BatchService {
         batch.setStatus("ASSIGNED");
         batchRepository.save(batch);
 
+        log.info("Batch #{} assigned to driver #{} ({})", batch.getId(), driver.getId(), driver.getName());
+
         executeAIAnalysis(batch);
 
         try {
@@ -117,9 +122,57 @@ public class BatchService {
             log.error("Error generating automatic route for batch #{}: {}", batch.getId(), e.getMessage());
         }
 
-        log.info("Driver '{}' automatically assigned to batch #{} ({} orders)",
-                driver.getName(), batch.getId(), batch.getOrders().size());
         return true;
+    }
+
+    @Transactional
+    public Batch createManualBatch(List<Long> orderIds, String city) {
+        if (orderIds == null || orderIds.isEmpty()) {
+            throw new RuntimeException("Debe seleccionar al menos un pedido para crear un lote.");
+        }
+
+        Batch batch = new Batch();
+        batch.setStatus("OPEN");
+        batch.setCity(city != null ? city : "Global");
+        batch = batchRepository.save(batch);
+
+        for (Long orderId : orderIds) {
+            Order order = orderRepository.findById(orderId)
+                    .orElseThrow(() -> new RuntimeException("Order no encontrado: " + orderId));
+            
+            // Validar que el pedido pertenezca a la misma ciudad que el lote (solo si hay una ciudad específica definida)
+            boolean isGlobalBatch = batch.getCity() == null || batch.getCity().trim().isEmpty() || batch.getCity().equalsIgnoreCase("Global");
+            if (!isGlobalBatch && !order.getCity().equalsIgnoreCase(batch.getCity())) {
+                throw new RuntimeException("El pedido #" + orderId + " (" + order.getCity() + ") no pertenece a la ciudad del lote (" + batch.getCity() + ")");
+            }
+            
+            order.setBatchId(batch.getId());
+            orderRepository.save(order);
+        }
+
+        log.info("Lote manual #{} creado con {} pedidos para {}", batch.getId(), orderIds.size(), city);
+        return batch;
+    }
+
+    @Transactional
+    public Batch assignDriverToBatch(Long batchId, Long driverId) {
+        Batch batch = findById(batchId);
+        Driver driver = driverRepository.findById(driverId)
+                .orElseThrow(() -> new RuntimeException("Driver not found with ID: " + driverId));
+        
+        batch.setDriver(driver);
+        batch.setStatus("ASSIGNED");
+        batch = batchRepository.save(batch);
+
+        executeAIAnalysis(batch);
+
+        try {
+            routeService.optimizeAndSaveRoute(batch.getId());
+        } catch (Exception e) {
+            log.error("Error generating automatic route for batch #{}: {}", batch.getId(), e.getMessage());
+        }
+
+        return batch;
     }
 
     private void executeAIAnalysis(Batch batch) {
@@ -162,8 +215,11 @@ public class BatchService {
     }
 
     @Transactional(readOnly = true)
-    public List<Batch> getPendingBatches() {
-        return batchRepository.findByDriverIsNullOrderByCreationDateAsc();
+    public List<Batch> getPendingBatches(String city) {
+        if (city != null && !city.isEmpty()) {
+            return batchRepository.findByCityAndDriverIsNullOrderByCreationDateAsc(city);
+        }
+        return batchRepository.findAll().stream().filter(b -> b.getDriver() == null).toList();
     }
 
     @Transactional(readOnly = true)

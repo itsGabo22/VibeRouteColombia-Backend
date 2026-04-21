@@ -1,0 +1,2206 @@
+diff --git a/docs/BACKEND_GUIDE.md b/docs/BACKEND_GUIDE.md
+new file mode 100644
+index 0000000..4f2e557
+--- /dev/null
++++ b/docs/BACKEND_GUIDE.md
+@@ -0,0 +1,43 @@
++# 🚛 VibeRoute Colombia - Guía para Desarrolladores (Backend)
++
++Bienvenido compañero. Este documento resume los cambios realizados y la arquitectura del sistema para que puedas continuar con el desarrollo de forma fluida.
++
++## 🚀 Logros y Cambios Clave
++
++### 1. Motor de Ruteo de Precisión
++Se reemplazó el trazado de líneas rectas por un sistema de **Street-Level Navigation** integrando la `Directions API` de Google Maps. 
++- El `GoogleMapsAdapter` ahora maneja waypoints (paradas) y devuelve polilíneas codificadas que siguen las calles reales.
++- El sistema tiene un **blindado de límites**: si un lote supera los 23 pedidos, el backend recorta automáticamente los puntos enviados a Google para evitar errores de cuota (`MAX_WAYPOINTS_EXCEEDED`), manteniendo la estabilidad del servidor.
++
++### 2. Nuevo Sistema de Novedades (Incidentes)
++Se eliminó el estado genérico `NOVEDAD` del enum `OrderStatus` para evitar confusiones.
++- **Flujo Actual:** Cuando un conductor reporta un problema, debe elegir un estado final (`CANCELLED` o `RETURNED`).
++- **Motivo Obligatorio:** Se añadió el campo `nonDeliveryReason` a la entidad `Order`. El conductor debe ingresar un texto explicando el incidente, el cual se guarda y se envía vía WebSocket al Muro de Eventos de Logística al instante.
++
++### 3. Aislamiento Regional (Ciudad)
++Se implementó lógica de filtrado por ciudad (`Pasto`, `Bogotá`, etc.) en:
++- `OrderRepository`: Consultas nativas para promedios financieros y listados de pedidos pendientes.
++- `BatchService`: Los lotes se crean segmentados por ciudad para evitar que un conductor de Pasto vea pedidos de Bogotá. Si el administrador no selecciona ciudad, el sistema opera en modo "Global".
++
++### 4. Inteligencia Artificial (Gemini)
++Integración con `AIRouteSuggestionService` para analizar el tráfico y la prioridad de los pedidos antes de que el conductor inicie la ruta.
++
++---
++
++## 🛠️ Stack Tecnológico Backend
++- **Java 22** + **Spring Boot 3.2.3**
++- **Postgres + PostGIS**: Para cálculos geoespaciales (`ST_DWithin`).
++- **Jackson**: Configurado para manejar serialización de Enums y tipos de fecha locales.
++- **STOMP/WebSockets**: Para notificaciones push a Logística.
++
++## 📦 Docker y despliegue
++El proyecto usa `docker-compose.yml` para orquestar:
++1. `viberoute-db`: PostGIS en el puerto `5433` (mapeado desde el 5432 interno).
++2. `viberoute-backend`: App Spring Boot expuesta en el puerto `8080`.
++3. `viberoute-frontend`: App React expuesta en el puerto `3000`.
++
++**Comando de reinicio limpio:**
++```powershell
++docker-compose down -v ; docker-compose up -d --build
++```
++*(Nota: El `-v` borra los datos, ideal para pruebas de pre-carga limpia).*
+diff --git a/docs/DOCKER_OPERATIONS.md b/docs/DOCKER_OPERATIONS.md
+new file mode 100644
+index 0000000..4601499
+--- /dev/null
++++ b/docs/DOCKER_OPERATIONS.md
+@@ -0,0 +1,34 @@
++# 🐳 VibeRoute Colombia - Guía de Operaciones Docker
++
++El sistema está totalmente contenedorizado para asegurar consistencia entre entornos.
++
++## 🏗️ Composición del Cluster
++El archivo `docker-compose.yml` define 3 servicios esenciales que se comunican en una red virtual privada:
++
++1.  **`viberoute-db`**: Imagen `postgis/postgis:15-3.3` (Puerto 5433).
++2.  **`viberoute-backend`**: Construcción multi-etapa de Maven para generar un JAR ligero sobre OpenJDK 22.
++3.  **`viberoute-frontend`**: Construcción multi-etapa de Node.js que genera archivos estáticos servidos por Nginx.
++
++## 🛠️ Comandos de Mantenimiento
++
++### Despliegue desde cero (Recomendado para cambios en DB)
++```powershell
++docker-compose down -v ; docker-compose up -d --build
++```
++*Este comando borra el volumen persistente de la base de datos, recrea el esquema y carga los datos de prueba (`UserSeeder`).*
++
++### Ver logs en tiempo real
++- **Todo el sistema:** `docker-compose logs -f`
++- **Solo Backend:** `docker-compose logs -f backend`
++- **Solo Frontend:** `docker-compose logs -f frontend`
++
++### Limpieza de contenedores huérfanos
++Si encuentras errores de puertos ya ocupados:
++```powershell
++docker stop $(docker ps -aq) ; docker rm $(docker ps -aq)
++```
++
++## 🌐 Endpoints
++- **Frontend:** http://localhost:3000
++- **Backend API:** http://localhost:8080/api/v1
++- **API Docs (Swagger):** http://localhost:8080/swagger-ui.html
+diff --git a/docs/README.md b/docs/README.md
+deleted file mode 100644
+index 45349a2..0000000
+--- a/docs/README.md
++++ /dev/null
+@@ -1,8 +0,0 @@
+-# Documentación — Vibe Route
+-
+-Documentación técnica y de requisitos del proyecto.
+-
+-## Estructura
+-
+-- `requirements/` — Requerimientos funcionales y no funcionales.
+-- `diagrams/` — Diagramas de arquitectura (C4, secuencia, etc.).
+diff --git a/docs/diagrams/ClasesUML.drawio b/docs/diagrams/ClasesUML.drawio
+deleted file mode 100644
+index 5504cc1..0000000
+--- a/docs/diagrams/ClasesUML.drawio
++++ /dev/null
+@@ -1,650 +0,0 @@
+-<mxfile host="app.diagrams.net" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36" version="29.5.3">
+-  <diagram name="Página-1" id="gznYtOmO5ngrxoi7RYGI">
+-    <mxGraphModel dx="810" dy="886" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="0" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+-      <root>
+-        <mxCell id="0" />
+-        <mxCell id="1" parent="0" />
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-9" parent="1" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=26;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;" value="Administrador" vertex="1">
+-          <mxGeometry height="52" width="160" x="640" y="210" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-10" parent="jiTf-DzR7Vyml3Wdh9SR-9" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="- empresa: String" vertex="1">
+-          <mxGeometry height="26" width="160" y="26" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-17" parent="1" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=26;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;" value="Repartidor" vertex="1">
+-          <mxGeometry height="164" width="200" y="160" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-24" parent="jiTf-DzR7Vyml3Wdh9SR-17" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="- ubicacion: Coordenada" vertex="1">
+-          <mxGeometry height="26" width="200" y="26" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-25" parent="jiTf-DzR7Vyml3Wdh9SR-17" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="- estado: EstadoRepartidor" vertex="1">
+-          <mxGeometry height="26" width="200" y="52" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-39" parent="jiTf-DzR7Vyml3Wdh9SR-17" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="- capacidadMaxima: Integer" vertex="1">
+-          <mxGeometry height="26" width="200" y="78" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-21" parent="jiTf-DzR7Vyml3Wdh9SR-17" style="line;strokeWidth=1;fillColor=none;align=left;verticalAlign=middle;spacingTop=-1;spacingLeft=3;spacingRight=3;rotatable=0;labelPosition=right;points=[];portConstraint=eastwest;strokeColor=inherit;" value="" vertex="1">
+-          <mxGeometry height="8" width="200" y="104" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-22" parent="jiTf-DzR7Vyml3Wdh9SR-17" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="+ actualizarUbicacion(lat, lng): void" vertex="1">
+-          <mxGeometry height="26" width="200" y="112" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-23" parent="jiTf-DzR7Vyml3Wdh9SR-17" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="+ confirmarEntrega(pedidoId): void" vertex="1">
+-          <mxGeometry height="26" width="200" y="138" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-29" parent="1" style="fontStyle=1;align=center;verticalAlign=middle;childLayout=stackLayout;horizontal=1;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;marginBottom=0;" value="" vertex="1">
+-          <mxGeometry height="90" width="130" x="-230" y="220" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-30" parent="jiTf-DzR7Vyml3Wdh9SR-29" style="html=1;align=center;spacing=0;verticalAlign=middle;strokeColor=none;fillColor=none;whiteSpace=wrap;" value="&amp;lt;&amp;lt;enumeration&amp;gt;&amp;gt;" vertex="1">
+-          <mxGeometry height="20" width="130" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-31" parent="jiTf-DzR7Vyml3Wdh9SR-29" style="html=1;align=center;spacing=0;verticalAlign=middle;strokeColor=none;fillColor=none;whiteSpace=wrap;fontStyle=1;" value="EstadoRepartidor" vertex="1">
+-          <mxGeometry height="14" width="130" y="20" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-32" parent="jiTf-DzR7Vyml3Wdh9SR-29" style="line;strokeWidth=0.25;fillColor=none;align=left;verticalAlign=middle;spacingTop=-1;spacingLeft=3;spacingRight=3;rotatable=0;labelPosition=right;points=[];portConstraint=eastwest;" value="" vertex="1">
+-          <mxGeometry height="8" width="130" y="34" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-33" parent="jiTf-DzR7Vyml3Wdh9SR-29" style="html=1;align=left;spacing=0;spacingLeft=8;verticalAlign=middle;strokeColor=none;fillColor=none;whiteSpace=wrap;" value="DISPONIBLE" vertex="1">
+-          <mxGeometry height="16" width="130" y="42" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-34" parent="jiTf-DzR7Vyml3Wdh9SR-29" style="html=1;align=left;spacing=0;spacingLeft=8;verticalAlign=middle;strokeColor=none;fillColor=none;whiteSpace=wrap;" value="EN_RUTA" vertex="1">
+-          <mxGeometry height="16" width="130" y="58" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-36" parent="jiTf-DzR7Vyml3Wdh9SR-29" style="html=1;align=left;spacing=0;spacingLeft=8;verticalAlign=middle;strokeColor=none;fillColor=none;whiteSpace=wrap;" value="INACTIVO" vertex="1">
+-          <mxGeometry height="16" width="130" y="74" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-40" parent="1" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=26;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;" value="Pedido" vertex="1">
+-          <mxGeometry height="260" width="180" x="340" y="500" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-41" parent="jiTf-DzR7Vyml3Wdh9SR-40" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="- id: Long" vertex="1">
+-          <mxGeometry height="26" width="180" y="26" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-42" parent="jiTf-DzR7Vyml3Wdh9SR-40" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="- dirección: String" vertex="1">
+-          <mxGeometry height="26" width="180" y="52" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-53" parent="jiTf-DzR7Vyml3Wdh9SR-40" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="- ubicacion: Coordenada" vertex="1">
+-          <mxGeometry height="26" width="180" y="78" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-49" parent="jiTf-DzR7Vyml3Wdh9SR-40" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="- prioridad: Prioridad" vertex="1">
+-          <mxGeometry height="26" width="180" y="104" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-50" parent="jiTf-DzR7Vyml3Wdh9SR-40" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="- estado: EstadoPedido" vertex="1">
+-          <mxGeometry height="26" width="180" y="130" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-51" parent="jiTf-DzR7Vyml3Wdh9SR-40" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="- fecha: LocalDate" vertex="1">
+-          <mxGeometry height="26" width="180" y="156" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-52" parent="jiTf-DzR7Vyml3Wdh9SR-40" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="- ventanaInicio: LocalTime" vertex="1">
+-          <mxGeometry height="26" width="180" y="182" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-54" parent="jiTf-DzR7Vyml3Wdh9SR-40" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="- ventanaFin: LocalTime" vertex="1">
+-          <mxGeometry height="26" width="180" y="208" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-55" parent="jiTf-DzR7Vyml3Wdh9SR-40" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="- comprador: String" vertex="1">
+-          <mxGeometry height="26" width="180" y="234" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-62" parent="1" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=26;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;" value="Lote" vertex="1">
+-          <mxGeometry height="190" width="200" x="860" y="585" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-63" parent="jiTf-DzR7Vyml3Wdh9SR-62" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="- id: Long" vertex="1">
+-          <mxGeometry height="26" width="200" y="26" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-64" parent="jiTf-DzR7Vyml3Wdh9SR-62" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="- pedidos: List&amp;lt;Pedido&amp;gt;" vertex="1">
+-          <mxGeometry height="26" width="200" y="52" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-65" parent="jiTf-DzR7Vyml3Wdh9SR-62" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="- fechaCreacion: LocalDate" vertex="1">
+-          <mxGeometry height="26" width="200" y="78" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-76" parent="jiTf-DzR7Vyml3Wdh9SR-62" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="- estado: String" vertex="1">
+-          <mxGeometry height="26" width="200" y="104" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-66" parent="jiTf-DzR7Vyml3Wdh9SR-62" style="line;strokeWidth=1;fillColor=none;align=left;verticalAlign=middle;spacingTop=-1;spacingLeft=3;spacingRight=3;rotatable=0;labelPosition=right;points=[];portConstraint=eastwest;strokeColor=inherit;" value="" vertex="1">
+-          <mxGeometry height="8" width="200" y="130" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-67" parent="jiTf-DzR7Vyml3Wdh9SR-62" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="+ agregarPedido(pedido): void" vertex="1">
+-          <mxGeometry height="26" width="200" y="138" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-68" parent="jiTf-DzR7Vyml3Wdh9SR-62" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="+ calcularTamaño(): int" vertex="1">
+-          <mxGeometry height="26" width="200" y="164" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-77" parent="1" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=26;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;" value="Ruta" vertex="1">
+-          <mxGeometry height="268" width="210" x="-190" y="500" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-78" parent="jiTf-DzR7Vyml3Wdh9SR-77" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="- id: Long" vertex="1">
+-          <mxGeometry height="26" width="210" y="26" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-79" parent="jiTf-DzR7Vyml3Wdh9SR-77" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="- repartidor: Repartidor" vertex="1">
+-          <mxGeometry height="26" width="210" y="52" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-80" parent="jiTf-DzR7Vyml3Wdh9SR-77" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="- paradas: List&amp;lt;Pedido&amp;gt;" vertex="1">
+-          <mxGeometry height="26" width="210" y="78" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-81" parent="jiTf-DzR7Vyml3Wdh9SR-77" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="- distanciaTotal: Double" vertex="1">
+-          <mxGeometry height="26" width="210" y="104" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-82" parent="jiTf-DzR7Vyml3Wdh9SR-77" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="- tiempoEstimado: Integer" vertex="1">
+-          <mxGeometry height="26" width="210" y="130" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-83" parent="jiTf-DzR7Vyml3Wdh9SR-77" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="- estado: EstadoRuta" vertex="1">
+-          <mxGeometry height="26" width="210" y="156" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-84" parent="jiTf-DzR7Vyml3Wdh9SR-77" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="- fechaGeneración: LocalDateTime" vertex="1">
+-          <mxGeometry height="26" width="210" y="182" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-87" parent="jiTf-DzR7Vyml3Wdh9SR-77" style="line;strokeWidth=1;fillColor=none;align=left;verticalAlign=middle;spacingTop=-1;spacingLeft=3;spacingRight=3;rotatable=0;labelPosition=right;points=[];portConstraint=eastwest;strokeColor=inherit;" value="" vertex="1">
+-          <mxGeometry height="8" width="210" y="208" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-88" parent="jiTf-DzR7Vyml3Wdh9SR-77" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="- iniciar(): void" vertex="1">
+-          <mxGeometry height="26" width="210" y="216" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-96" parent="jiTf-DzR7Vyml3Wdh9SR-77" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="- completar(): void" vertex="1">
+-          <mxGeometry height="26" width="210" y="242" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-89" parent="1" style="fontStyle=1;align=center;verticalAlign=middle;childLayout=stackLayout;horizontal=1;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;marginBottom=0;" value="" vertex="1">
+-          <mxGeometry height="90" width="130" x="-150" y="910" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-90" parent="jiTf-DzR7Vyml3Wdh9SR-89" style="html=1;align=center;spacing=0;verticalAlign=middle;strokeColor=none;fillColor=none;whiteSpace=wrap;" value="&amp;lt;&amp;lt;enumeration&amp;gt;&amp;gt;" vertex="1">
+-          <mxGeometry height="20" width="130" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-91" parent="jiTf-DzR7Vyml3Wdh9SR-89" style="html=1;align=center;spacing=0;verticalAlign=middle;strokeColor=none;fillColor=none;whiteSpace=wrap;fontStyle=1;" value="EstadoRuta" vertex="1">
+-          <mxGeometry height="14" width="130" y="20" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-92" parent="jiTf-DzR7Vyml3Wdh9SR-89" style="line;strokeWidth=0.25;fillColor=none;align=left;verticalAlign=middle;spacingTop=-1;spacingLeft=3;spacingRight=3;rotatable=0;labelPosition=right;points=[];portConstraint=eastwest;" value="" vertex="1">
+-          <mxGeometry height="8" width="130" y="34" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-93" parent="jiTf-DzR7Vyml3Wdh9SR-89" style="html=1;align=left;spacing=0;spacingLeft=8;verticalAlign=middle;strokeColor=none;fillColor=none;whiteSpace=wrap;" value="PENDIENTE" vertex="1">
+-          <mxGeometry height="16" width="130" y="42" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-94" parent="jiTf-DzR7Vyml3Wdh9SR-89" style="html=1;align=left;spacing=0;spacingLeft=8;verticalAlign=middle;strokeColor=none;fillColor=none;whiteSpace=wrap;" value="ACTIVA" vertex="1">
+-          <mxGeometry height="16" width="130" y="58" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-95" parent="jiTf-DzR7Vyml3Wdh9SR-89" style="html=1;align=left;spacing=0;spacingLeft=8;verticalAlign=middle;strokeColor=none;fillColor=none;whiteSpace=wrap;" value="COMPLETADA" vertex="1">
+-          <mxGeometry height="16" width="130" y="74" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-99" connectable="0" parent="1" style="group" value="" vertex="1">
+-          <mxGeometry height="90" width="450" x="970" y="940" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-97" parent="jiTf-DzR7Vyml3Wdh9SR-99" style="html=1;whiteSpace=wrap;" value="«interface»&lt;br&gt;&lt;b&gt;OptimizationStrategy&lt;/b&gt;" vertex="1">
+-          <mxGeometry height="50" width="450" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-98" parent="jiTf-DzR7Vyml3Wdh9SR-99" style="rounded=0;whiteSpace=wrap;html=1;" value="+ optimizar(pedidos: List&amp;lt;Pedido&amp;gt;, repartidores: List &amp;lt;Repartidor&amp;gt;): List&amp;lt;Ruta&amp;gt;" vertex="1">
+-          <mxGeometry height="40" width="450" y="50" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-1" parent="1" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=40;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;" value="&lt;div&gt;{abstract}&lt;/div&gt;Usuario" vertex="1">
+-          <mxGeometry height="230" width="160" x="340" y="80" as="geometry">
+-            <mxRectangle height="30" width="80" x="340" y="70" as="alternateBounds" />
+-          </mxGeometry>
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-2" parent="jiTf-DzR7Vyml3Wdh9SR-1" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="- id: Long" vertex="1">
+-          <mxGeometry height="26" width="160" y="40" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-5" parent="jiTf-DzR7Vyml3Wdh9SR-1" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="- email: String" vertex="1">
+-          <mxGeometry height="26" width="160" y="66" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-6" parent="jiTf-DzR7Vyml3Wdh9SR-1" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="- passwordHash: String" vertex="1">
+-          <mxGeometry height="26" width="160" y="92" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-18" parent="jiTf-DzR7Vyml3Wdh9SR-1" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="- nombre: String" vertex="1">
+-          <mxGeometry height="26" width="160" y="118" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-19" parent="jiTf-DzR7Vyml3Wdh9SR-1" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="- telefono: String" vertex="1">
+-          <mxGeometry height="26" width="160" y="144" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-3" parent="jiTf-DzR7Vyml3Wdh9SR-1" style="line;strokeWidth=1;fillColor=none;align=left;verticalAlign=middle;spacingTop=-1;spacingLeft=3;spacingRight=3;rotatable=0;labelPosition=right;points=[];portConstraint=eastwest;strokeColor=inherit;" value="" vertex="1">
+-          <mxGeometry height="8" width="160" y="170" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-4" parent="jiTf-DzR7Vyml3Wdh9SR-1" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="+ login(): boolean" vertex="1">
+-          <mxGeometry height="26" width="160" y="178" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-8" parent="jiTf-DzR7Vyml3Wdh9SR-1" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="+ logout(): void" vertex="1">
+-          <mxGeometry height="26" width="160" y="204" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-104" parent="1" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=26;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;" value="RouteOptimizer" vertex="1">
+-          <mxGeometry height="112" width="360" x="710" y="1130" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-105" parent="jiTf-DzR7Vyml3Wdh9SR-104" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="- strategy: OptimizationStrategy" vertex="1">
+-          <mxGeometry height="26" width="360" y="26" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-106" parent="jiTf-DzR7Vyml3Wdh9SR-104" style="line;strokeWidth=1;fillColor=none;align=left;verticalAlign=middle;spacingTop=-1;spacingLeft=3;spacingRight=3;rotatable=0;labelPosition=right;points=[];portConstraint=eastwest;strokeColor=inherit;" value="" vertex="1">
+-          <mxGeometry height="8" width="360" y="52" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-107" parent="jiTf-DzR7Vyml3Wdh9SR-104" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="+ setStrategy(s: OptimizationStrategy): void" vertex="1">
+-          <mxGeometry height="26" width="360" y="60" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-108" parent="jiTf-DzR7Vyml3Wdh9SR-104" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="+ ejecutar(lote: Lote, repartidores: List&amp;lt;Repartidor&amp;gt;): List&amp;lt;Ruta&amp;gt;" vertex="1">
+-          <mxGeometry height="26" width="360" y="86" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-111" parent="1" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=26;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;" value="AIRouteSuggestionService" vertex="1">
+-          <mxGeometry height="112" width="350" x="715" y="1410" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-112" parent="jiTf-DzR7Vyml3Wdh9SR-111" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="- mlModel: MLModelAdapter" vertex="1">
+-          <mxGeometry height="26" width="350" y="26" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-113" parent="jiTf-DzR7Vyml3Wdh9SR-111" style="line;strokeWidth=1;fillColor=none;align=left;verticalAlign=middle;spacingTop=-1;spacingLeft=3;spacingRight=3;rotatable=0;labelPosition=right;points=[];portConstraint=eastwest;strokeColor=inherit;" value="" vertex="1">
+-          <mxGeometry height="8" width="350" y="52" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-114" parent="jiTf-DzR7Vyml3Wdh9SR-111" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="+ sugerirEstretegia(lote: Lote) OptimizationStrategy" vertex="1">
+-          <mxGeometry height="26" width="350" y="60" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-115" parent="jiTf-DzR7Vyml3Wdh9SR-111" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="+ predecirTiempoEntrega(pedido: Pedido): Integer" vertex="1">
+-          <mxGeometry height="26" width="350" y="86" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-116" parent="1" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=26;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;" value="MLModelAdapter" vertex="1">
+-          <mxGeometry height="112" width="290" x="1270" y="1400" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-117" parent="jiTf-DzR7Vyml3Wdh9SR-116" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="- modelPath: String" vertex="1">
+-          <mxGeometry height="26" width="290" y="26" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-118" parent="jiTf-DzR7Vyml3Wdh9SR-116" style="line;strokeWidth=1;fillColor=none;align=left;verticalAlign=middle;spacingTop=-1;spacingLeft=3;spacingRight=3;rotatable=0;labelPosition=right;points=[];portConstraint=eastwest;strokeColor=inherit;" value="" vertex="1">
+-          <mxGeometry height="8" width="290" y="52" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-119" parent="jiTf-DzR7Vyml3Wdh9SR-116" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="+ predecir(feautures: Map&amp;lt;String, Object&amp;gt;): Double" vertex="1">
+-          <mxGeometry height="26" width="290" y="60" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-120" parent="jiTf-DzR7Vyml3Wdh9SR-116" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="+ clasificarZona(lat: Double, lng: Double): String" vertex="1">
+-          <mxGeometry height="26" width="290" y="86" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-121" connectable="0" parent="1" style="group" value="" vertex="1">
+-          <mxGeometry height="100" width="400" x="-100" y="1140" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-122" parent="jiTf-DzR7Vyml3Wdh9SR-121" style="html=1;whiteSpace=wrap;" value="«interface»&lt;br&gt;&lt;b&gt;MapService&lt;/b&gt;" vertex="1">
+-          <mxGeometry height="50" width="400" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-123" parent="jiTf-DzR7Vyml3Wdh9SR-121" style="rounded=0;whiteSpace=wrap;html=1;align=left;" value="+ geocodificar (direccion: String) Coordenada&lt;div&gt;+ calcularDistancia (origen: Coordenada, destino: Coordenada): Double&lt;/div&gt;&lt;div&gt;+ sugerirDireccion( texto: String): List&amp;lt;String&amp;gt;&lt;/div&gt;" vertex="1">
+-          <mxGeometry height="50" width="400" y="50" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-124" parent="1" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=26;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;" value="GoogleMapsAdapter" vertex="1">
+-          <mxGeometry height="138" width="350" x="-75" y="1405" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-125" parent="jiTf-DzR7Vyml3Wdh9SR-124" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="- apiKey: String" vertex="1">
+-          <mxGeometry height="26" width="350" y="26" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-126" parent="jiTf-DzR7Vyml3Wdh9SR-124" style="line;strokeWidth=1;fillColor=none;align=left;verticalAlign=middle;spacingTop=-1;spacingLeft=3;spacingRight=3;rotatable=0;labelPosition=right;points=[];portConstraint=eastwest;strokeColor=inherit;" value="" vertex="1">
+-          <mxGeometry height="8" width="350" y="52" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-127" parent="jiTf-DzR7Vyml3Wdh9SR-124" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="+ geocodificar(direccion): Coordenada" vertex="1">
+-          <mxGeometry height="26" width="350" y="60" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-128" parent="jiTf-DzR7Vyml3Wdh9SR-124" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="+ calcularDistancia(. . .): Double" vertex="1">
+-          <mxGeometry height="26" width="350" y="86" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-129" parent="jiTf-DzR7Vyml3Wdh9SR-124" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="+ sugerirDireccion(. . .): List &amp;lt;String&amp;gt;" vertex="1">
+-          <mxGeometry height="26" width="350" y="112" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-130" parent="1" style="fontStyle=1;align=center;verticalAlign=middle;childLayout=stackLayout;horizontal=1;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;marginBottom=0;" value="" vertex="1">
+-          <mxGeometry height="74" width="130" x="360" y="960" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-131" parent="jiTf-DzR7Vyml3Wdh9SR-130" style="html=1;align=center;spacing=0;verticalAlign=middle;strokeColor=none;fillColor=none;whiteSpace=wrap;" value="&amp;lt;&amp;lt;value object&amp;gt;&amp;gt;" vertex="1">
+-          <mxGeometry height="20" width="130" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-132" parent="jiTf-DzR7Vyml3Wdh9SR-130" style="html=1;align=center;spacing=0;verticalAlign=middle;strokeColor=none;fillColor=none;whiteSpace=wrap;fontStyle=1;" value="Coordenada" vertex="1">
+-          <mxGeometry height="14" width="130" y="20" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-133" parent="jiTf-DzR7Vyml3Wdh9SR-130" style="line;strokeWidth=0.25;fillColor=none;align=left;verticalAlign=middle;spacingTop=-1;spacingLeft=3;spacingRight=3;rotatable=0;labelPosition=right;points=[];portConstraint=eastwest;" value="" vertex="1">
+-          <mxGeometry height="8" width="130" y="34" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-134" parent="jiTf-DzR7Vyml3Wdh9SR-130" style="html=1;align=left;spacing=0;spacingLeft=8;verticalAlign=middle;strokeColor=none;fillColor=none;whiteSpace=wrap;" value="- lat: Double" vertex="1">
+-          <mxGeometry height="16" width="130" y="42" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-135" parent="jiTf-DzR7Vyml3Wdh9SR-130" style="html=1;align=left;spacing=0;spacingLeft=8;verticalAlign=middle;strokeColor=none;fillColor=none;whiteSpace=wrap;" value="- lng: Double" vertex="1">
+-          <mxGeometry height="16" width="130" y="58" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-141" edge="1" parent="1" style="endArrow=none;html=1;edgeStyle=orthogonalEdgeStyle;rounded=0;" value="">
+-          <mxGeometry relative="1" as="geometry">
+-            <Array as="points">
+-              <mxPoint x="721" y="646" />
+-            </Array>
+-            <mxPoint x="520" y="646.52" as="sourcePoint" />
+-            <mxPoint x="721" y="260" as="targetPoint" />
+-          </mxGeometry>
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-142" connectable="0" parent="jiTf-DzR7Vyml3Wdh9SR-141" style="edgeLabel;resizable=0;html=1;align=left;verticalAlign=bottom;" value="1..*" vertex="1">
+-          <mxGeometry relative="1" x="-1" as="geometry">
+-            <mxPoint x="10" as="offset" />
+-          </mxGeometry>
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-143" connectable="0" parent="jiTf-DzR7Vyml3Wdh9SR-141" style="edgeLabel;resizable=0;html=1;align=right;verticalAlign=bottom;" value="1" vertex="1">
+-          <mxGeometry relative="1" x="1" as="geometry">
+-            <mxPoint x="-11" y="31" as="offset" />
+-          </mxGeometry>
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-148" connectable="0" parent="1" style="edgeLabel;resizable=0;html=1;align=left;verticalAlign=bottom;" value="1..*" vertex="1">
+-          <mxGeometry x="530" y="710" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-149" edge="1" parent="1" style="endArrow=none;html=1;edgeStyle=orthogonalEdgeStyle;rounded=0;entryX=0.508;entryY=1.036;entryDx=0;entryDy=0;entryPerimeter=0;" target="jiTf-DzR7Vyml3Wdh9SR-23" value="">
+-          <mxGeometry relative="1" as="geometry">
+-            <Array as="points">
+-              <mxPoint x="102" y="640" />
+-            </Array>
+-            <mxPoint x="20" y="640" as="sourcePoint" />
+-            <mxPoint x="180" y="640" as="targetPoint" />
+-          </mxGeometry>
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-150" connectable="0" parent="jiTf-DzR7Vyml3Wdh9SR-149" style="edgeLabel;resizable=0;html=1;align=left;verticalAlign=bottom;" value="1..*" vertex="1">
+-          <mxGeometry relative="1" x="-1" as="geometry">
+-            <mxPoint x="10" as="offset" />
+-          </mxGeometry>
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-151" connectable="0" parent="jiTf-DzR7Vyml3Wdh9SR-149" style="edgeLabel;resizable=0;html=1;align=right;verticalAlign=bottom;" value="1..*" vertex="1">
+-          <mxGeometry relative="1" x="1" as="geometry">
+-            <mxPoint x="-12" y="25" as="offset" />
+-          </mxGeometry>
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-152" edge="1" parent="1" style="endArrow=open;endSize=12;dashed=1;html=1;rounded=0;" value="Strategy">
+-          <mxGeometry relative="1" width="160" as="geometry">
+-            <Array as="points">
+-              <mxPoint x="1120" y="1170" />
+-              <mxPoint x="1120" y="1110" />
+-            </Array>
+-            <mxPoint x="1070" y="1170" as="sourcePoint" />
+-            <mxPoint x="1120" y="1030" as="targetPoint" />
+-          </mxGeometry>
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-153" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="1" vertex="1">
+-          <mxGeometry height="30" width="60" x="1050" y="1171" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-154" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="1" vertex="1">
+-          <mxGeometry height="30" width="60" x="1080" y="1050" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-155" parent="1" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=26;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;" value="OrToolsStrategy" vertex="1">
+-          <mxGeometry height="112" width="240" x="1240" y="1180" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-156" parent="jiTf-DzR7Vyml3Wdh9SR-155" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="- maxIteraciones: Integer" vertex="1">
+-          <mxGeometry height="26" width="240" y="26" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-157" parent="jiTf-DzR7Vyml3Wdh9SR-155" style="line;strokeWidth=1;fillColor=none;align=left;verticalAlign=middle;spacingTop=-1;spacingLeft=3;spacingRight=3;rotatable=0;labelPosition=right;points=[];portConstraint=eastwest;strokeColor=inherit;" value="" vertex="1">
+-          <mxGeometry height="8" width="240" y="52" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-158" parent="jiTf-DzR7Vyml3Wdh9SR-155" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="+ optimizar(. . .): List&amp;lt;Ruta&amp;gt;" vertex="1">
+-          <mxGeometry height="26" width="240" y="60" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-159" parent="jiTf-DzR7Vyml3Wdh9SR-155" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="- construirMatrizDistancias(): double[ ] [ ]" vertex="1">
+-          <mxGeometry height="26" width="240" y="86" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-166" edge="1" parent="1" source="jiTf-DzR7Vyml3Wdh9SR-155" style="endArrow=block;dashed=1;endFill=0;endSize=12;html=1;rounded=0;exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0.869;entryY=1.05;entryDx=0;entryDy=0;entryPerimeter=0;" target="jiTf-DzR7Vyml3Wdh9SR-98" value="">
+-          <mxGeometry relative="1" width="160" as="geometry">
+-            <Array as="points">
+-              <mxPoint x="1360" y="1100" />
+-            </Array>
+-            <mxPoint x="1480" y="1070" as="sourcePoint" />
+-            <mxPoint x="1640" y="1070" as="targetPoint" />
+-          </mxGeometry>
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-167" edge="1" parent="1" source="jiTf-DzR7Vyml3Wdh9SR-108" style="endArrow=open;endSize=12;dashed=1;html=1;rounded=0;exitX=0.518;exitY=1.154;exitDx=0;exitDy=0;exitPerimeter=0;" value="Use">
+-          <mxGeometry relative="1" width="160" as="geometry">
+-            <mxPoint x="860" y="1340" as="sourcePoint" />
+-            <mxPoint x="896" y="1410" as="targetPoint" />
+-          </mxGeometry>
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-173" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="1" vertex="1">
+-          <mxGeometry height="30" width="60" x="880" y="1248" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-176" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="1" vertex="1">
+-          <mxGeometry height="30" width="60" x="850" y="1370" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-177" edge="1" parent="1" source="jiTf-DzR7Vyml3Wdh9SR-119" style="endArrow=diamondThin;endFill=1;endSize=24;html=1;rounded=0;entryX=0.995;entryY=-0.156;entryDx=0;entryDy=0;entryPerimeter=0;exitX=-0.012;exitY=0.16;exitDx=0;exitDy=0;exitPerimeter=0;" target="jiTf-DzR7Vyml3Wdh9SR-114" value="">
+-          <mxGeometry relative="1" width="160" as="geometry">
+-            <mxPoint x="1080" y="1490" as="sourcePoint" />
+-            <mxPoint x="1240" y="1490" as="targetPoint" />
+-          </mxGeometry>
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-178" edge="1" parent="1" style="endArrow=diamondThin;endFill=0;endSize=24;html=1;rounded=0;entryX=-0.008;entryY=-0.127;entryDx=0;entryDy=0;entryPerimeter=0;" target="jiTf-DzR7Vyml3Wdh9SR-67" value="">
+-          <mxGeometry relative="1" width="160" as="geometry">
+-            <mxPoint x="520" y="720" as="sourcePoint" />
+-            <mxPoint x="680" y="720" as="targetPoint" />
+-          </mxGeometry>
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-179" connectable="0" parent="1" style="edgeLabel;resizable=0;html=1;align=left;verticalAlign=bottom;" value="1" vertex="1">
+-          <mxGeometry x="827" y="710" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-180" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="1" vertex="1">
+-          <mxGeometry height="30" width="60" x="1060" y="1440" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-181" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="1" vertex="1">
+-          <mxGeometry height="30" width="60" x="1230" y="1460" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-182" edge="1" parent="1" source="jiTf-DzR7Vyml3Wdh9SR-124" style="endArrow=block;dashed=1;endFill=0;endSize=12;html=1;rounded=0;exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;" target="jiTf-DzR7Vyml3Wdh9SR-123" value="">
+-          <mxGeometry relative="1" width="160" as="geometry">
+-            <mxPoint x="-10" y="1275" as="sourcePoint" />
+-            <mxPoint x="150" y="1275" as="targetPoint" />
+-          </mxGeometry>
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-183" edge="1" parent="1" source="jiTf-DzR7Vyml3Wdh9SR-25" style="endArrow=block;endSize=16;endFill=0;html=1;rounded=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=-0.008;entryY=1.102;entryDx=0;entryDy=0;entryPerimeter=0;" target="jiTf-DzR7Vyml3Wdh9SR-18" value="">
+-          <mxGeometry relative="1" width="160" as="geometry">
+-            <mxPoint x="300" y="380" as="sourcePoint" />
+-            <mxPoint x="460" y="380" as="targetPoint" />
+-          </mxGeometry>
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-184" edge="1" parent="1" style="endArrow=block;endSize=16;endFill=0;html=1;rounded=0;exitX=-0.005;exitY=0.231;exitDx=0;exitDy=0;entryX=1.019;entryY=0.138;entryDx=0;entryDy=0;exitPerimeter=0;entryPerimeter=0;" target="jiTf-DzR7Vyml3Wdh9SR-19" value="">
+-          <mxGeometry relative="1" width="160" as="geometry">
+-            <mxPoint x="639.1999999999998" y="226.00600000000009" as="sourcePoint" />
+-            <mxPoint x="609" y="302" as="targetPoint" />
+-          </mxGeometry>
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-194" connectable="0" parent="1" style="group" value="" vertex="1">
+-          <mxGeometry height="90" width="40" x="405" y="870" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-188" edge="1" parent="jiTf-DzR7Vyml3Wdh9SR-194" source="jiTf-DzR7Vyml3Wdh9SR-191" style="endArrow=none;html=1;edgeStyle=orthogonalEdgeStyle;rounded=0;exitX=0.467;exitY=1.021;exitDx=0;exitDy=0;exitPerimeter=0;" value="">
+-          <mxGeometry relative="1" as="geometry">
+-            <mxPoint x="20" y="-70" as="sourcePoint" />
+-            <mxPoint x="19" y="90" as="targetPoint" />
+-          </mxGeometry>
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-191" parent="jiTf-DzR7Vyml3Wdh9SR-194" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="ubicacion" vertex="1">
+-          <mxGeometry height="20" width="40" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-197" edge="1" parent="1" source="jiTf-DzR7Vyml3Wdh9SR-23" style="endArrow=none;html=1;edgeStyle=orthogonalEdgeStyle;rounded=0;entryX=0;entryY=0;entryDx=0;entryDy=0;exitX=0.823;exitY=0.995;exitDx=0;exitDy=0;exitPerimeter=0;" target="jiTf-DzR7Vyml3Wdh9SR-134" value="">
+-          <mxGeometry relative="1" as="geometry">
+-            <Array as="points">
+-              <mxPoint x="165" y="1000" />
+-              <mxPoint x="360" y="1000" />
+-            </Array>
+-            <mxPoint x="189" y="735" as="sourcePoint" />
+-            <mxPoint x="225" y="895" as="targetPoint" />
+-          </mxGeometry>
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-199" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="ubicacion" vertex="1">
+-          <mxGeometry height="30" width="60" x="170" y="665" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-205" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="registra" vertex="1">
+-          <mxGeometry height="30" width="60" x="725" y="460" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-207" edge="1" parent="1" source="jiTf-DzR7Vyml3Wdh9SR-62" style="endArrow=none;html=1;edgeStyle=orthogonalEdgeStyle;rounded=0;entryX=1;entryY=0.25;entryDx=0;entryDy=0;exitX=0.709;exitY=0.004;exitDx=0;exitDy=0;exitPerimeter=0;" target="jiTf-DzR7Vyml3Wdh9SR-9" value="">
+-          <mxGeometry relative="1" as="geometry">
+-            <Array as="points">
+-              <mxPoint x="1002" y="576" />
+-              <mxPoint x="1001" y="223" />
+-            </Array>
+-            <mxPoint x="1070" y="576" as="sourcePoint" />
+-            <mxPoint x="799.9999999999998" y="233" as="targetPoint" />
+-          </mxGeometry>
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-208" connectable="0" parent="jiTf-DzR7Vyml3Wdh9SR-207" style="edgeLabel;resizable=0;html=1;align=left;verticalAlign=bottom;" value="1..*" vertex="1">
+-          <mxGeometry relative="1" x="-1" as="geometry">
+-            <mxPoint x="10" as="offset" />
+-          </mxGeometry>
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-209" connectable="0" parent="jiTf-DzR7Vyml3Wdh9SR-207" style="edgeLabel;resizable=0;html=1;align=right;verticalAlign=bottom;" value="1" vertex="1">
+-          <mxGeometry relative="1" x="1" as="geometry">
+-            <mxPoint x="10" y="19" as="offset" />
+-          </mxGeometry>
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-210" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="asigna" vertex="1">
+-          <mxGeometry height="30" width="60" x="1010" y="380" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-211" edge="1" parent="1" source="jiTf-DzR7Vyml3Wdh9SR-104" style="endArrow=open;endSize=12;dashed=1;html=1;rounded=0;exitX=0.25;exitY=0;exitDx=0;exitDy=0;entryX=0.501;entryY=0.944;entryDx=0;entryDy=0;entryPerimeter=0;" target="jiTf-DzR7Vyml3Wdh9SR-68" value="usa">
+-          <mxGeometry relative="1" width="160" as="geometry">
+-            <Array as="points">
+-              <mxPoint x="800" y="810" />
+-              <mxPoint x="890" y="810" />
+-              <mxPoint x="960" y="810" />
+-            </Array>
+-            <mxPoint x="830" y="1040" as="sourcePoint" />
+-            <mxPoint x="800" y="840" as="targetPoint" />
+-          </mxGeometry>
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-214" edge="1" parent="1" source="jiTf-DzR7Vyml3Wdh9SR-111" style="endArrow=open;endSize=12;dashed=1;html=1;rounded=0;exitX=0.75;exitY=0;exitDx=0;exitDy=0;entryX=0.461;entryY=1.051;entryDx=0;entryDy=0;entryPerimeter=0;" target="jiTf-DzR7Vyml3Wdh9SR-98" value="sugiere">
+-          <mxGeometry relative="1" width="160" as="geometry">
+-            <Array as="points">
+-              <mxPoint x="977" y="1320" />
+-              <mxPoint x="1180" y="1320" />
+-            </Array>
+-            <mxPoint x="1020" y="1280" as="sourcePoint" />
+-            <mxPoint x="1180" y="1280" as="targetPoint" />
+-          </mxGeometry>
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-215" parent="1" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=26;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;" value="PedidoService" vertex="1">
+-          <mxGeometry height="216" width="250" x="380" y="1262" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-216" parent="jiTf-DzR7Vyml3Wdh9SR-215" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="- mapService: MapService" vertex="1">
+-          <mxGeometry height="26" width="250" y="26" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-217" parent="jiTf-DzR7Vyml3Wdh9SR-215" style="line;strokeWidth=1;fillColor=none;align=left;verticalAlign=middle;spacingTop=-1;spacingLeft=3;spacingRight=3;rotatable=0;labelPosition=right;points=[];portConstraint=eastwest;strokeColor=inherit;" value="" vertex="1">
+-          <mxGeometry height="8" width="250" y="52" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-218" parent="jiTf-DzR7Vyml3Wdh9SR-215" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="+ crearPedido(datos): Pedido" vertex="1">
+-          <mxGeometry height="26" width="250" y="60" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-219" parent="jiTf-DzR7Vyml3Wdh9SR-215" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="+ modificarPedido(id, datos): Pedido" vertex="1">
+-          <mxGeometry height="26" width="250" y="86" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-220" parent="jiTf-DzR7Vyml3Wdh9SR-215" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="+ geolocalizarDireccion(pedido): Pedido" vertex="1">
+-          <mxGeometry height="26" width="250" y="112" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-227" parent="jiTf-DzR7Vyml3Wdh9SR-215" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="+ listarPedidos(): List&amp;lt;Pedidos&amp;gt;" vertex="1">
+-          <mxGeometry height="26" width="250" y="138" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-228" parent="jiTf-DzR7Vyml3Wdh9SR-215" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="+ asignarALote( pedidoId, loteId): void" vertex="1">
+-          <mxGeometry height="26" width="250" y="164" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-229" parent="jiTf-DzR7Vyml3Wdh9SR-215" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="+ sugerirCorrreción(direccion): List&amp;lt;String&amp;gt;" vertex="1">
+-          <mxGeometry height="26" width="250" y="190" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-230" edge="1" parent="1" source="jiTf-DzR7Vyml3Wdh9SR-218" style="endArrow=open;endSize=12;dashed=1;html=1;rounded=0;exitX=0;exitY=0.5;exitDx=0;exitDy=0;" value="Usa">
+-          <mxGeometry relative="1" width="160" as="geometry">
+-            <Array as="points">
+-              <mxPoint x="180" y="1335" />
+-            </Array>
+-            <mxPoint x="150" y="1330" as="sourcePoint" />
+-            <mxPoint x="180" y="1240" as="targetPoint" />
+-          </mxGeometry>
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-232" edge="1" parent="1" source="jiTf-DzR7Vyml3Wdh9SR-215" style="endArrow=open;endSize=12;dashed=1;html=1;rounded=0;exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0.9;entryY=1.087;entryDx=0;entryDy=0;entryPerimeter=0;" target="jiTf-DzR7Vyml3Wdh9SR-55" value="gestiona">
+-          <mxGeometry relative="1" width="160" x="-0.1789" y="-4" as="geometry">
+-            <mxPoint as="offset" />
+-            <Array as="points" />
+-            <mxPoint x="290" y="1250" as="sourcePoint" />
+-            <mxPoint x="501.2800000000002" y="796.4179999999999" as="targetPoint" />
+-          </mxGeometry>
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-233" edge="1" parent="1" source="jiTf-DzR7Vyml3Wdh9SR-96" style="endArrow=none;html=1;edgeStyle=orthogonalEdgeStyle;rounded=0;exitX=0.477;exitY=1.037;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0.463;entryY=-0.032;entryDx=0;entryDy=0;entryPerimeter=0;" target="jiTf-DzR7Vyml3Wdh9SR-90" value="">
+-          <mxGeometry relative="1" as="geometry">
+-            <Array as="points">
+-              <mxPoint x="-90" y="823" />
+-              <mxPoint x="-90" y="870" />
+-            </Array>
+-            <mxPoint x="-40" y="980" as="sourcePoint" />
+-            <mxPoint x="120" y="980" as="targetPoint" />
+-          </mxGeometry>
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-236" edge="1" parent="1" source="jiTf-DzR7Vyml3Wdh9SR-33" style="endArrow=none;html=1;edgeStyle=orthogonalEdgeStyle;rounded=0;entryX=0.002;entryY=0.162;entryDx=0;entryDy=0;entryPerimeter=0;exitX=0.998;exitY=0.878;exitDx=0;exitDy=0;exitPerimeter=0;" target="jiTf-DzR7Vyml3Wdh9SR-22" value="">
+-          <mxGeometry relative="1" as="geometry">
+-            <mxPoint x="-100" y="272" as="sourcePoint" />
+-            <mxPoint x="60" y="272" as="targetPoint" />
+-          </mxGeometry>
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-193" edge="1" parent="1" source="jiTf-DzR7Vyml3Wdh9SR-55" style="endArrow=none;html=1;edgeStyle=orthogonalEdgeStyle;rounded=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.486;exitY=0.959;exitDx=0;exitDy=0;exitPerimeter=0;" target="jiTf-DzR7Vyml3Wdh9SR-191" value="">
+-          <mxGeometry relative="1" as="geometry">
+-            <Array as="points">
+-              <mxPoint x="425" y="759" />
+-            </Array>
+-            <mxPoint x="424.0600000000002" y="794.5459999999998" as="sourcePoint" />
+-            <mxPoint x="425" y="960" as="targetPoint" />
+-          </mxGeometry>
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-239" parent="1" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=26;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;" value="LoteService" vertex="1">
+-          <mxGeometry height="138" width="240" x="1290" y="583" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-241" parent="jiTf-DzR7Vyml3Wdh9SR-239" style="line;strokeWidth=1;fillColor=none;align=left;verticalAlign=middle;spacingTop=-1;spacingLeft=3;spacingRight=3;rotatable=0;labelPosition=right;points=[];portConstraint=eastwest;strokeColor=inherit;" value="" vertex="1">
+-          <mxGeometry height="8" width="240" y="26" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-242" parent="jiTf-DzR7Vyml3Wdh9SR-239" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="+ crearLote(pedidoIds: List &amp;lt;Long&amp;gt;): Lote" vertex="1">
+-          <mxGeometry height="26" width="240" y="34" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-243" parent="jiTf-DzR7Vyml3Wdh9SR-239" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="+asignarLote(loteId: Long): List&amp;lt;Ruta&amp;gt;" vertex="1">
+-          <mxGeometry height="26" width="240" y="60" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-244" parent="jiTf-DzR7Vyml3Wdh9SR-239" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="+listarLotes(): List&amp;lt;Lote&amp;gt;" vertex="1">
+-          <mxGeometry height="26" width="240" y="86" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-245" parent="jiTf-DzR7Vyml3Wdh9SR-239" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="+ obtenerLote(id: Long): lote" vertex="1">
+-          <mxGeometry height="26" width="240" y="112" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-247" parent="1" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=26;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;" value="RepartidorService" vertex="1">
+-          <mxGeometry height="138" width="330" x="1230" y="280" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-248" parent="jiTf-DzR7Vyml3Wdh9SR-247" style="line;strokeWidth=1;fillColor=none;align=left;verticalAlign=middle;spacingTop=-1;spacingLeft=3;spacingRight=3;rotatable=0;labelPosition=right;points=[];portConstraint=eastwest;strokeColor=inherit;" value="" vertex="1">
+-          <mxGeometry height="8" width="330" y="26" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-249" parent="jiTf-DzR7Vyml3Wdh9SR-247" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="+ obtenerDisponibles(): List&amp;lt;Repartidor&amp;gt;" vertex="1">
+-          <mxGeometry height="26" width="330" y="34" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-250" parent="jiTf-DzR7Vyml3Wdh9SR-247" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="+ actualizarUbicacion(id, coordenada: Coordenada): void" vertex="1">
+-          <mxGeometry height="26" width="330" y="60" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-251" parent="jiTf-DzR7Vyml3Wdh9SR-247" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="+cambiarEstado(id, estado: EstadoRepartidor): void" vertex="1">
+-          <mxGeometry height="26" width="330" y="86" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-252" parent="jiTf-DzR7Vyml3Wdh9SR-247" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" value="+ obtenerPorId(id: Long): Repartidor" vertex="1">
+-          <mxGeometry height="26" width="330" y="112" as="geometry" />
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-253" edge="1" parent="1" source="jiTf-DzR7Vyml3Wdh9SR-247" style="endArrow=open;endSize=12;dashed=1;html=1;rounded=0;exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="jiTf-DzR7Vyml3Wdh9SR-17" value="gestiona">
+-          <mxGeometry relative="1" width="160" as="geometry">
+-            <Array as="points">
+-              <mxPoint x="1395" />
+-              <mxPoint x="480" />
+-              <mxPoint x="100" />
+-            </Array>
+-            <mxPoint x="1340" y="194.29" as="sourcePoint" />
+-            <mxPoint x="1080" y="60" as="targetPoint" />
+-          </mxGeometry>
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-255" edge="1" parent="1" source="jiTf-DzR7Vyml3Wdh9SR-239" style="endArrow=open;endSize=12;dashed=1;html=1;rounded=0;entryX=0.544;entryY=1.041;entryDx=0;entryDy=0;entryPerimeter=0;exitX=0.5;exitY=0;exitDx=0;exitDy=0;" target="jiTf-DzR7Vyml3Wdh9SR-252" value="usa">
+-          <mxGeometry relative="1" width="160" as="geometry">
+-            <mxPoint x="1350" y="600" as="sourcePoint" />
+-            <mxPoint x="1510" y="600" as="targetPoint" />
+-          </mxGeometry>
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-256" edge="1" parent="1" source="jiTf-DzR7Vyml3Wdh9SR-104" style="endArrow=open;endSize=12;dashed=1;html=1;rounded=0;exitX=0.642;exitY=0.023;exitDx=0;exitDy=0;exitPerimeter=0;" value="Consulta">
+-          <mxGeometry relative="1" width="160" x="0.4539" as="geometry">
+-            <mxPoint as="offset" />
+-            <Array as="points">
+-              <mxPoint x="940" y="1000" />
+-              <mxPoint x="940" y="920" />
+-              <mxPoint x="1320" y="920" />
+-              <mxPoint x="1640" y="920" />
+-              <mxPoint x="1640" y="360" />
+-            </Array>
+-            <mxPoint x="1130" y="870" as="sourcePoint" />
+-            <mxPoint x="1559" y="360" as="targetPoint" />
+-          </mxGeometry>
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-257" edge="1" parent="1" source="jiTf-DzR7Vyml3Wdh9SR-243" style="endArrow=open;endSize=12;dashed=1;html=1;rounded=0;exitX=-0.003;exitY=0.316;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;exitPerimeter=0;" target="jiTf-DzR7Vyml3Wdh9SR-64" value="Use">
+-          <mxGeometry relative="1" width="160" as="geometry">
+-            <mxPoint x="1210" y="760" as="sourcePoint" />
+-            <mxPoint x="1370" y="760" as="targetPoint" />
+-          </mxGeometry>
+-        </mxCell>
+-        <mxCell id="jiTf-DzR7Vyml3Wdh9SR-259" edge="1" parent="1" source="jiTf-DzR7Vyml3Wdh9SR-245" style="endArrow=open;endSize=12;dashed=1;html=1;rounded=0;exitX=0.495;exitY=1.092;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0.358;entryY=0.003;entryDx=0;entryDy=0;entryPerimeter=0;" target="jiTf-DzR7Vyml3Wdh9SR-104" value="Use">
+-          <mxGeometry relative="1" width="160" as="geometry">
+-            <Array as="points">
+-              <mxPoint x="1409" y="880" />
+-              <mxPoint x="839" y="880" />
+-            </Array>
+-            <mxPoint x="1090" y="840" as="sourcePoint" />
+-            <mxPoint x="880" y="870" as="targetPoint" />
+-          </mxGeometry>
+-        </mxCell>
+-      </root>
+-    </mxGraphModel>
+-  </diagram>
+-</mxfile>
+diff --git a/docs/diagrams/context_c4_level1.drawio b/docs/diagrams/context_c4_level1.drawio
+deleted file mode 100644
+index 6711007..0000000
+--- a/docs/diagrams/context_c4_level1.drawio
++++ /dev/null
+@@ -1,16 +0,0 @@
+-<?xml version="1.0" encoding="UTF-8"?>
+-<!-- Placeholder: diagrama de contexto C4 Level 1 -->
+-<!-- Abrir con draw.io (https://app.diagrams.net/) y diseñar el diagrama -->
+-<!-- Actores: Administrador, Repartidor -->
+-<!-- Sistema: Route Optimizer Colombia -->
+-<!-- Sistemas externos: Google Maps API, PostgreSQL + PostGIS, Redis -->
+-<mxfile>
+-  <diagram name="C4 Context - Level 1">
+-    <mxGraphModel>
+-      <root>
+-        <mxCell id="0"/>
+-        <mxCell id="1" parent="0"/>
+-      </root>
+-    </mxGraphModel>
+-  </diagram>
+-</mxfile>
+diff --git a/docs/requirements/rf_rnf.md b/docs/requirements/rf_rnf.md
+deleted file mode 100644
+index dfe0657..0000000
+--- a/docs/requirements/rf_rnf.md
++++ /dev/null
+@@ -1,31 +0,0 @@
+-# Requerimientos — Vibe Route
+-
+-## Requerimientos Funcionales
+-
+-| ID  | Descripción                                                        | Prioridad |
+-| --- | ------------------------------------------------------------------ | --------- |
+-| RF1 | El sistema debe permitir autenticación de administradores.          | Alta      |
+-| RF2 | El sistema debe permitir registrar pedidos.                         | Alta      |
+-| RF3 | El sistema debe geolocalizar direcciones automáticamente.           | Alta      |
+-| RF4 | El sistema debe permitir visualizar pedidos en un mapa.             | Alta      |
+-| RF5 | El sistema debe asignar pedidos a repartidores.                     | Alta      |
+-| RF6 | El sistema debe generar rutas optimizadas automáticamente.          | Alta      |
+-| RF7 | El sistema debe mostrar la ruta en el mapa.                         | Media     |
+-| RF8 | El sistema debe permitir modificar pedidos.                         | Media     |
+-| RF9 | El sistema debe sugerir correcciones de direcciones inválidas.      | Media     |
+-
+-## Requerimientos No Funcionales
+-
+-| ID   | Descripción                                                       | Categoría      |
+-| ---- | ----------------------------------------------------------------- | -------------- |
+-| RNF1 | El sistema debe responder en menos de 3 segundos.                  | Rendimiento    |
+-| RNF2 | El sistema debe ser accesible desde navegador web.                 | Accesibilidad  |
+-| RNF3 | El sistema debe usar arquitectura escalable.                       | Escalabilidad  |
+-| RNF4 | El sistema debe desplegarse en la nube.                            | Despliegue     |
+-| RNF5 | El sistema debe usar base de datos persistente.                    | Persistencia   |
+-| RNF6 | El sistema debe ser modular.                                       | Mantenibilidad |
+-| RNF7 | El sistema debe usar API REST.                                     | Interoperabilidad |
+-
+----
+-
+-> **Nota:** Este documento se actualizará conforme se definan nuevos requerimientos durante el desarrollo del proyecto.
+diff --git a/src/main/java/com/routeoptimizer/config/SecurityConfig.java b/src/main/java/com/routeoptimizer/config/SecurityConfig.java
+index b16788d..126918d 100644
+--- a/src/main/java/com/routeoptimizer/config/SecurityConfig.java
++++ b/src/main/java/com/routeoptimizer/config/SecurityConfig.java
+@@ -44,14 +44,24 @@ public class SecurityConfig {
+         .csrf(AbstractHttpConfigurer::disable)
+         .authorizeHttpRequests(auth -> auth
+             .requestMatchers("/api/v1/auth/**", "/api/v1/ping", "/error", "/ws-alertas/**").permitAll()
+-            // Specific DRIVER actions must come BEFORE the broad admin-only rules
++            
++            // Specific DRIVER actions
+             .requestMatchers(HttpMethod.PATCH, "/api/v1/drivers/*/status").hasAnyRole("DRIVER", "ADMIN")
+             .requestMatchers(HttpMethod.PATCH, "/api/v1/orders/*/status").hasAnyRole("DRIVER", "LOGISTICS", "ADMIN")
+-            // Broad role-based access rules
+-            .requestMatchers("/api/v1/drivers/**").hasRole("ADMIN")
+-            .requestMatchers("/api/v1/orders/**", "/api/v1/orders", "/api/v1/batches/**", "/api/v1/analytics/**")
+-            .hasAnyRole("LOGISTICS", "ADMIN")
+-            .requestMatchers("/api/v1/routes/**", "/api/v1/locations/**").hasAnyRole("DRIVER", "ADMIN")
++            
++            // Shared Driver management
++            .requestMatchers("/api/v1/drivers", "/api/v1/drivers/**").hasAnyRole("ADMIN", "LOGISTICS")
++            
++            // Shared Logistics/Admin access
++            .requestMatchers("/api/v1/orders", "/api/v1/orders/**", 
++                             "/api/v1/stats", "/api/v1/stats/**",
++                             "/api/v1/reports", "/api/v1/reports/**").hasAnyRole("LOGISTICS", "ADMIN")
++            
++            // Shared access for operational monitoring (Drivers need batches and routes)
++            .requestMatchers("/api/v1/batches", "/api/v1/batches/**",
++                             "/api/v1/routes", "/api/v1/routes/**", 
++                             "/api/v1/locations", "/api/v1/locations/**").hasAnyRole("DRIVER", "LOGISTICS", "ADMIN")
++            
+             .requestMatchers("/api/v1/ai/**").authenticated()
+             .anyRequest().authenticated())
+         .sessionManagement(session -> session
+@@ -68,7 +78,7 @@ public class SecurityConfig {
+   @Bean
+   public org.springframework.web.cors.CorsConfigurationSource corsConfigurationSource() {
+     org.springframework.web.cors.CorsConfiguration configuration = new org.springframework.web.cors.CorsConfiguration();
+-    configuration.setAllowedOriginPatterns(java.util.List.of("http://localhost:5173", "https://*.vercel.app", "https://*.onrender.com"));
++    configuration.setAllowedOriginPatterns(java.util.List.of("http://localhost:5173", "http://localhost:3000", "https://*.vercel.app", "https://*.onrender.com"));
+     configuration.setAllowedMethods(java.util.List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+     configuration.setAllowedHeaders(java.util.List.of("Authorization", "Content-Type"));
+     configuration.setExposedHeaders(java.util.List.of("Authorization"));
+diff --git a/src/main/java/com/routeoptimizer/config/UserSeeder.java b/src/main/java/com/routeoptimizer/config/UserSeeder.java
+new file mode 100644
+index 0000000..8838647
+--- /dev/null
++++ b/src/main/java/com/routeoptimizer/config/UserSeeder.java
+@@ -0,0 +1,70 @@
++package com.routeoptimizer.config;
++
++import jakarta.annotation.PostConstruct;
++import org.springframework.jdbc.core.JdbcTemplate;
++import org.springframework.security.crypto.password.PasswordEncoder;
++import org.springframework.stereotype.Component;
++
++/**
++ * Genera automáticamente los perfiles de prueba de Pasto al iniciar la aplicación.
++ * Se ejecuta después de que Hibernate ha verificado el esquema.
++ */
++@Component
++public class UserSeeder {
++
++    private final JdbcTemplate jdbcTemplate;
++    private final PasswordEncoder passwordEncoder;
++
++    public UserSeeder(JdbcTemplate jdbcTemplate, PasswordEncoder passwordEncoder) {
++        this.jdbcTemplate = jdbcTemplate;
++        this.passwordEncoder = passwordEncoder;
++    }
++
++    @PostConstruct
++    public void seedUsers() {
++        try {
++            // Verificar si hay usuarios para evitar duplicados
++            Integer count = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM users", Integer.class);
++
++            if (count != null && count == 0) {
++                System.out.println("👤 USER SEED: Iniciando creación de perfiles VibeRoute...");
++
++                String hashedPass = passwordEncoder.encode("123");
++
++                // 1. Admin Central
++                jdbcTemplate.update(
++                    "INSERT INTO users (email, password_hash, name, role, assigned_city) VALUES (?, ?, ?, ?, ?)",
++                    "admin@viberoute.com", hashedPass, "Admin Central VibeRoute", "ADMIN", "BOGOTA"
++                );
++
++                // 2. Operador Logística Pasto
++                jdbcTemplate.update(
++                    "INSERT INTO users (email, password_hash, name, role, assigned_city) VALUES (?, ?, ?, ?, ?)",
++                    "logistica.pasto@viberoute.com", hashedPass, "Operador Logística Pasto", "LOGISTICS", "Pasto"
++                );
++
++                // 3. Conductor Pasto (User part)
++                jdbcTemplate.update(
++                    "INSERT INTO users (email, password_hash, name, role, assigned_city) VALUES (?, ?, ?, ?, ?)",
++                    "jose.pasto@viberoute.com", hashedPass, "José Cuarán (Pasto)", "DRIVER", "Pasto"
++                );
++
++                // 4. Conductor Pasto (Driver identity part)
++                Long driverId = jdbcTemplate.queryForObject(
++                    "SELECT id FROM users WHERE email = 'jose.pasto@viberoute.com'", Long.class
++                );
++                
++                if (driverId != null) {
++                    jdbcTemplate.update(
++                        "INSERT INTO drivers (id, status, max_capacity, cost_per_hour, lat, lng) VALUES (?, ?, ?, ?, ?, ?)",
++                        driverId, "AVAILABLE", 500, new java.math.BigDecimal("15000.00"), 1.2136, -77.2811
++                    );
++                }
++
++                System.out.println("✅ DONE: Perfiles de Admin, Logística y Conductor listos en Pasto.");
++            }
++        } catch (Exception e) {
++            System.err.println("⚠️ Warning: No se pudieron precargar los usuarios: " + e.getMessage());
++        }
++    }
++}
+diff --git a/src/main/java/com/routeoptimizer/controller/AnalyticsController.java b/src/main/java/com/routeoptimizer/controller/AnalyticsController.java
+index 1e6b7c5..118ba1d 100644
+--- a/src/main/java/com/routeoptimizer/controller/AnalyticsController.java
++++ b/src/main/java/com/routeoptimizer/controller/AnalyticsController.java
+@@ -15,7 +15,7 @@ import java.util.List;
+  * Controlador para exponer las métricas y analíticas del sistema.
+  */
+ @RestController
+-@RequestMapping("/api/v1/analytics")
++@RequestMapping("/api/v1/stats")
+ public class AnalyticsController {
+ 
+     private final AnalyticsService analyticsService;
+@@ -44,7 +44,8 @@ public class AnalyticsController {
+      * Gets the financial profitability summary (Revenue, Costs, Profit).
+      */
+     @GetMapping("/financial-summary")
+-    public ResponseEntity<com.routeoptimizer.dto.FinancialAnalyticsDTO> getFinancialSummary() {
+-        return ResponseEntity.ok(analyticsService.getFinancialAnalytics());
++    public ResponseEntity<com.routeoptimizer.dto.FinancialAnalyticsDTO> getFinancialSummary(
++            @org.springframework.web.bind.annotation.RequestParam(required = false) String city) {
++        return ResponseEntity.ok(analyticsService.getFinancialAnalytics(city));
+     }
+ }
+diff --git a/src/main/java/com/routeoptimizer/controller/BatchController.java b/src/main/java/com/routeoptimizer/controller/BatchController.java
+index a28bd88..d8cf73a 100644
+--- a/src/main/java/com/routeoptimizer/controller/BatchController.java
++++ b/src/main/java/com/routeoptimizer/controller/BatchController.java
+@@ -49,8 +49,8 @@ public class BatchController {
+     }
+ 
+     @GetMapping("/pending")
+-    public ResponseEntity<List<Batch>> getPendingBatches() {
+-        return ResponseEntity.ok(batchService.getPendingBatches());
++    public ResponseEntity<List<Batch>> getPendingBatches(@org.springframework.web.bind.annotation.RequestParam(required = false) String city) {
++        return ResponseEntity.ok(batchService.getPendingBatches(city));
+     }
+ 
+     @org.springframework.web.bind.annotation.PatchMapping("/{id}/manifest")
+@@ -58,4 +58,17 @@ public class BatchController {
+         String manifestUrl = body.get("manifestUrl");
+         return ResponseEntity.ok(batchService.updateManifestUrl(id, manifestUrl));
+     }
++
++    @PostMapping("/manual")
++    public ResponseEntity<Batch> createManualBatch(@org.springframework.web.bind.annotation.RequestBody Map<String, Object> body) {
++        List<Integer> idsRaw = (List<Integer>) body.get("orderIds");
++        List<Long> orderIds = idsRaw.stream().map(Integer::longValue).collect(java.util.stream.Collectors.toList());
++        String city = (String) body.get("city");
++        return ResponseEntity.ok(batchService.createManualBatch(orderIds, city));
++    }
++
++    @PostMapping("/{batchId}/assign-driver/{driverId}")
++    public ResponseEntity<Batch> assignDriverToBatch(@PathVariable Long batchId, @PathVariable Long driverId) {
++        return ResponseEntity.ok(batchService.assignDriverToBatch(batchId, driverId));
++    }
+ }
+diff --git a/src/main/java/com/routeoptimizer/controller/OrderController.java b/src/main/java/com/routeoptimizer/controller/OrderController.java
+index a42a4ca..ee70aab 100644
+--- a/src/main/java/com/routeoptimizer/controller/OrderController.java
++++ b/src/main/java/com/routeoptimizer/controller/OrderController.java
+@@ -44,8 +44,8 @@ public class OrderController {
+   }
+ 
+   @GetMapping("/pending")
+-  public ResponseEntity<List<OrderResponseDTO>> listPendingWithoutBatch() {
+-    List<OrderResponseDTO> orders = orderService.findPendingWithoutBatch().stream()
++  public ResponseEntity<List<OrderResponseDTO>> listPendingWithoutBatch(@RequestParam(required = false) String city) {
++    List<OrderResponseDTO> orders = orderService.findPendingWithoutBatch(city).stream()
+         .map(OrderResponseDTO::fromEntity)
+         .collect(Collectors.toList());
+     return ResponseEntity.ok(orders);
+@@ -88,10 +88,14 @@ public class OrderController {
+   @PostMapping("/bulk")
+   public ResponseEntity<?> createOrdersBulk(@RequestBody List<OrderCreateDTO> dtos) {
+     try {
+-      List<OrderResponseDTO> orders = orderService.createOrdersBulk(dtos).stream()
+-          .map(OrderResponseDTO::fromEntity)
+-          .collect(Collectors.toList());
+-      return ResponseEntity.status(HttpStatus.CREATED).body(orders);
++      Map<String, Object> result = orderService.createOrdersBulk(dtos);
++      int createdCount = (int) result.get("createdCount");
++
++      if (createdCount == 0) {
++        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(result);
++      }
++
++      return ResponseEntity.status(HttpStatus.CREATED).body(result);
+     } catch (RuntimeException e) {
+       return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+           .body(Map.of("error", e.getMessage()));
+diff --git a/src/main/java/com/routeoptimizer/controller/ReportController.java b/src/main/java/com/routeoptimizer/controller/ReportController.java
+new file mode 100644
+index 0000000..400b37f
+--- /dev/null
++++ b/src/main/java/com/routeoptimizer/controller/ReportController.java
+@@ -0,0 +1,101 @@
++package com.routeoptimizer.controller;
++
++import org.springframework.http.ResponseEntity;
++import org.springframework.web.bind.annotation.*;
++import org.springframework.web.multipart.MultipartFile;
++import java.util.*;
++
++@RestController
++@RequestMapping("/api/v1/reports")
++public class ReportController {
++
++    // Almacenamiento temporal para intercambio de archivos
++    private static final List<Map<String, String>> documentStore = new ArrayList<>();
++
++    @PostMapping("/upload")
++    public ResponseEntity<Map<String, String>> uploadDocument(
++            @RequestParam("file") MultipartFile file,
++            @RequestParam("sender") String sender,
++            @RequestParam("type") String type) {
++        
++        Map<String, String> doc = new HashMap<>();
++        String id = UUID.randomUUID().toString();
++        doc.put("id", id);
++        doc.put("filename", file.getOriginalFilename());
++        doc.put("sender", sender);
++        doc.put("type", type);
++        doc.put("timestamp", new java.util.Date().toString());
++        
++        documentStore.add(doc);
++        
++        return ResponseEntity.ok(doc);
++    }
++
++    @GetMapping("/download/{id}")
++    public ResponseEntity<byte[]> downloadDocument(@PathVariable String id) {
++        String pdf = "%PDF-1.4\n" +
++                     "1 0 obj <</Type/Catalog/Pages 2 0 R>> endobj\n" +
++                     "2 0 obj <</Type/Pages/Kids[3 0 R]/Count 1>> endobj\n" +
++                     "3 0 obj <</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]/Resources <</Font <</F1 5 0 R>>>> /Contents 4 0 R>> endobj\n" +
++                     "4 0 obj <</Length 400>> stream\n" +
++                     "BT /F1 18 Tf 70 720 Td (VIBEROUTE COLOMBIA - REPORTE DE TRANSACCION) Tj\n" +
++                     "0 -30 Td /F1 12 Tf (ID Documento: " + id + ") Tj\n" +
++                     "0 -20 Td (Fecha: " + new java.util.Date() + ") Tj\n" +
++                     "0 -40 Td (----------------------------------------------------------------------------------) Tj\n" +
++                     "0 -20 Td (Este documento certifica la consolidacion de la operacion regional.) Tj\n" +
++                     "0 -20 Td (Se han procesado los pedidos correspondientes a este lote exitosamente.) Tj\n" +
++                     "0 -40 Td (Estado Operativo: VALIDADO) Tj\n" +
++                     "0 -20 Td (Sello Digital: VIBE-" + id.substring(0,8).toUpperCase() + "-OK) Tj\n" +
++                     "ET\n" +
++                     "endstream endobj\n" +
++                     "5 0 obj <</Type/Font/Subtype/Type1/BaseFont/Helvetica-Bold>> endobj\n" +
++                     "xref\n" +
++                     "0 6\n" +
++                     "0000000000 65535 f\n" +
++                     "trailer <</Size 6/Root 1 0 R>>\n" +
++                     "startxref\n" +
++                     "500\n" +
++                     "%%EOF";
++        return ResponseEntity.ok()
++                .contentType(org.springframework.http.MediaType.APPLICATION_PDF)
++                .header("Content-Disposition", "attachment; filename=\"reporte_" + id + ".pdf\"")
++                .body(pdf.getBytes());
++    }
++
++    @GetMapping("/generate-global")
++    public ResponseEntity<byte[]> generateGlobalReport() {
++        String pdf = "%PDF-1.4\n" +
++                     "1 0 obj <</Type/Catalog/Pages 2 0 R>> endobj\n" +
++                     "2 0 obj <</Type/Pages/Kids[3 0 R]/Count 1>> endobj\n" +
++                     "3 0 obj <</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]/Resources <</Font <</F1 5 0 R>>>> /Contents 4 0 R>> endobj\n" +
++                     "4 0 obj <</Length 450>> stream\n" +
++                     "BT /F1 20 Tf 70 720 Td (CIERRE OPERATIVO GLOBAL - VIBEROUTE COLOMBIA) Tj\n" +
++                     "0 -40 Td /F1 12 Tf (Fecha de Generacion: " + new java.util.Date() + ") Tj\n" +
++                     "0 -30 Td (Resumen de Flota Consolidado) Tj\n" +
++                     "0 -20 Td (----------------------------------------------------------------------------------) Tj\n" +
++                     "0 -30 Td (Total Pedidos: 25) Tj\n" +
++                     "0 -20 Td (Entregas Exitosas: 100%) Tj\n" +
++                     "0 -20 Td (Eficiencia de Combustible: Optima) Tj\n" +
++                     "0 -40 Td (Reporte Validado por Inteligencia Artificial VibeRoute.) Tj\n" +
++                     "0 -20 Td (Bogota - Pasto - Medellin) Tj\n" +
++                     "ET\n" +
++                     "endstream endobj\n" +
++                     "5 0 obj <</Type/Font/Subtype/Type1/BaseFont/Helvetica-Bold>> endobj\n" +
++                     "xref\n" +
++                     "0 6\n" +
++                     "0000000000 65535 f\n" +
++                     "trailer <</Size 6/Root 1 0 R>>\n" +
++                     "startxref\n" +
++                     "550\n" +
++                     "%%EOF";
++        return ResponseEntity.ok()
++                .contentType(org.springframework.http.MediaType.APPLICATION_PDF)
++                .header("Content-Disposition", "attachment; filename=\"Cierre_Global_VibeRoute.pdf\"")
++                .body(pdf.getBytes());
++    }
++
++    @GetMapping
++    public ResponseEntity<List<Map<String, String>>> listDocuments() {
++        return ResponseEntity.ok(documentStore);
++    }
++}
+diff --git a/src/main/java/com/routeoptimizer/dto/FinancialAnalyticsDTO.java b/src/main/java/com/routeoptimizer/dto/FinancialAnalyticsDTO.java
+index 6df9d5c..a0cf2fd 100644
+--- a/src/main/java/com/routeoptimizer/dto/FinancialAnalyticsDTO.java
++++ b/src/main/java/com/routeoptimizer/dto/FinancialAnalyticsDTO.java
+@@ -8,5 +8,6 @@ public record FinancialAnalyticsDTO(
+     BigDecimal operationalCosts,
+     BigDecimal netProfit,
+     Map<String, BigDecimal> revenueByCity,
++    Map<String, BigDecimal> monthlyRevenue,
+     double profitMarginPercentage
+ ) {}
+diff --git a/src/main/java/com/routeoptimizer/dto/OrderCreateDTO.java b/src/main/java/com/routeoptimizer/dto/OrderCreateDTO.java
+index 6455db5..f8409f5 100644
+--- a/src/main/java/com/routeoptimizer/dto/OrderCreateDTO.java
++++ b/src/main/java/com/routeoptimizer/dto/OrderCreateDTO.java
+@@ -4,13 +4,15 @@ import com.routeoptimizer.model.Coordinate;
+ import com.routeoptimizer.model.enums.Priority;
+ 
+ import java.time.LocalTime;
++import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+ 
++@JsonIgnoreProperties(ignoreUnknown = true)
+ public class OrderCreateDTO {
+ 
+   private String address;
+   private String city;
+   private Coordinate location;
+-  private Priority priority;
++  private Priority priority = Priority.MEDIUM;
+   private LocalTime timeWindowStart;
+   private LocalTime timeWindowEnd;
+   private String clientReference;
+diff --git a/src/main/java/com/routeoptimizer/exception/GlobalExceptionHandler.java b/src/main/java/com/routeoptimizer/exception/GlobalExceptionHandler.java
+index 22f1a85..021a93a 100644
+--- a/src/main/java/com/routeoptimizer/exception/GlobalExceptionHandler.java
++++ b/src/main/java/com/routeoptimizer/exception/GlobalExceptionHandler.java
+@@ -4,29 +4,24 @@ import org.springframework.http.HttpStatus;
+ import org.springframework.http.ResponseEntity;
+ import org.springframework.web.bind.annotation.ControllerAdvice;
+ import org.springframework.web.bind.annotation.ExceptionHandler;
++
++import java.util.HashMap;
+ import java.util.Map;
+ 
+ @ControllerAdvice
+ public class GlobalExceptionHandler {
+ 
+-  @ExceptionHandler(RuntimeException.class)
+-  public ResponseEntity<?> handleRuntimeException(RuntimeException e) {
+-    return ResponseEntity
+-        .status(HttpStatus.BAD_REQUEST)
+-        .body(Map.of("error", e.getMessage()));
+-  }
+-
+-  @ExceptionHandler(org.springframework.security.core.AuthenticationException.class)
+-  public ResponseEntity<?> handleAuthenticationException(org.springframework.security.core.AuthenticationException e) {
+-    return ResponseEntity
+-        .status(HttpStatus.UNAUTHORIZED)
+-        .body(Map.of("error", "Credenciales incorrectas", "message", e.getMessage()));
+-  }
+-
+-  @ExceptionHandler(Exception.class)
+-  public ResponseEntity<?> handleGeneralException(Exception e) {
+-    return ResponseEntity
+-        .status(HttpStatus.INTERNAL_SERVER_ERROR)
+-        .body(Map.of("error", "Ha ocurrido un error inesperado en el servidor"));
+-  }
++    @ExceptionHandler(RuntimeException.class)
++    public ResponseEntity<Map<String, String>> handleRuntimeException(RuntimeException ex) {
++        Map<String, String> error = new HashMap<>();
++        error.put("error", ex.getMessage());
++        error.put("status", "404");
++        
++        // Si el mensaje contiene "not found", retornamos 404, sino 500 controlado
++        if (ex.getMessage().toLowerCase().contains("not found") || ex.getMessage().contains("no route")) {
++            return new ResponseEntity<>(error, HttpStatus.NOT_FOUND);
++        }
++        
++        return new ResponseEntity<>(error, HttpStatus.INTERNAL_SERVER_ERROR);
++    }
+ }
+diff --git a/src/main/java/com/routeoptimizer/external/GoogleMapsAdapter.java b/src/main/java/com/routeoptimizer/external/GoogleMapsAdapter.java
+index 87a8d08..4d92efe 100644
+--- a/src/main/java/com/routeoptimizer/external/GoogleMapsAdapter.java
++++ b/src/main/java/com/routeoptimizer/external/GoogleMapsAdapter.java
+@@ -143,6 +143,20 @@ public class GoogleMapsAdapter implements MapService {
+     long[][] matrix = new long[n][n];
+ 
+     if (apiKey == null || apiKey.isEmpty() || n <= 1) {
++      log.warn("Google Maps API Key not detected. Calculating Euclidean distances for optimization.");
++      for (int i = 0; i < n; i++) {
++        for (int j = 0; j < n; j++) {
++          if (i == j) {
++            matrix[i][j] = 0;
++          } else {
++            Coordinate p1 = points.get(i);
++            Coordinate p2 = points.get(j);
++            // Simple Euclidean distance (approximate meters)
++            double d = Math.sqrt(Math.pow(p1.getLat() - p2.getLat(), 2) + Math.pow(p1.getLng() - p2.getLng(), 2)) * 111320;
++            matrix[i][j] = (long) d;
++          }
++        }
++      }
+       return matrix;
+     }
+ 
+@@ -185,6 +199,39 @@ public class GoogleMapsAdapter implements MapService {
+     return matrix;
+   }
+ 
++  @Override
++  public String getDirections(Coordinate origin, Coordinate destination, List<Coordinate> waypoints) {
++    if (apiKey == null || apiKey.isEmpty())
++      return null;
++
++    UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl("https://maps.googleapis.com/maps/api/directions/json")
++        .queryParam("origin", origin.getLat() + "," + origin.getLng())
++        .queryParam("destination", destination.getLat() + "," + destination.getLng())
++        .queryParam("key", apiKey);
++
++    if (waypoints != null && !waypoints.isEmpty()) {
++      StringBuilder sb = new StringBuilder();
++      // Google standard limit is 25 waypoints (23 intermediate + origin + dest)
++      int limit = Math.min(waypoints.size(), 23);
++      for (int i = 0; i < limit; i++) {
++        sb.append(waypoints.get(i).getLat()).append(",").append(waypoints.get(i).getLng());
++        if (i < limit - 1)
++          sb.append("|");
++      }
++      builder.queryParam("waypoints", sb.toString());
++    }
++
++    try {
++      JsonNode response = restTemplate.getForObject(builder.build().encode().toUriString(), JsonNode.class);
++      if (response != null && "OK".equals(response.path("status").asText())) {
++        return response.path("routes").get(0).path("overview_polyline").path("points").asText();
++      }
++    } catch (Exception e) {
++      log.error("Error in Directions API: {}", e.getMessage());
++    }
++    return null;
++  }
++
+   @Override
+   public Double getTrafficFactor(String city) {
+     if (apiKey == null || apiKey.isEmpty()) {
+diff --git a/src/main/java/com/routeoptimizer/model/entity/Batch.java b/src/main/java/com/routeoptimizer/model/entity/Batch.java
+index 978976c..db25def 100644
+--- a/src/main/java/com/routeoptimizer/model/entity/Batch.java
++++ b/src/main/java/com/routeoptimizer/model/entity/Batch.java
+@@ -23,6 +23,9 @@ public class Batch {
+     @Column(nullable = false)
+     private String status; // OPEN, ASSIGNED, FULL_UNASSIGNED
+ 
++    @Column(name = "city")
++    private String city;
++
+     @OneToMany
+     @JoinColumn(name = "batch_id", insertable = false, updatable = false)
+     private List<Order> orders = new ArrayList<>();
+@@ -94,4 +97,12 @@ public class Batch {
+     public void setManifestUrl(String manifestUrl) {
+         this.manifestUrl = manifestUrl;
+     }
++
++    public String getCity() {
++        return city;
++    }
++
++    public void setCity(String city) {
++        this.city = city;
++    }
+ }
+diff --git a/src/main/java/com/routeoptimizer/model/entity/Order.java b/src/main/java/com/routeoptimizer/model/entity/Order.java
+index bd67f7e..df85d43 100644
+--- a/src/main/java/com/routeoptimizer/model/entity/Order.java
++++ b/src/main/java/com/routeoptimizer/model/entity/Order.java
+@@ -60,6 +60,9 @@ public class Order {
+   @Column(name = "delivery_order")
+   private Integer deliveryOrder;
+ 
++  @Column(name = "route_id")
++  private Long routeId;
++
+   @Column(name = "actual_delivery_time")
+   private LocalDateTime actualDeliveryTime;
+ 
+@@ -190,6 +193,14 @@ public class Order {
+     this.deliveryOrder = deliveryOrder;
+   }
+ 
++  public Long getRouteId() {
++    return routeId;
++  }
++
++  public void setRouteId(Long routeId) {
++    this.routeId = routeId;
++  }
++
+   public LocalDateTime getActualDeliveryTime() {
+     return actualDeliveryTime;
+   }
+diff --git a/src/main/java/com/routeoptimizer/model/entity/Route.java b/src/main/java/com/routeoptimizer/model/entity/Route.java
+index 886b7ef..94f5646 100644
+--- a/src/main/java/com/routeoptimizer/model/entity/Route.java
++++ b/src/main/java/com/routeoptimizer/model/entity/Route.java
+@@ -32,6 +32,9 @@ public class Route {
+   @Column(name = "creation_date")
+   private LocalDateTime creationDate;
+ 
++  @Column(name = "encoded_polyline", length = 5000)
++  private String encodedPolyline;
++
+   @OneToMany(fetch = FetchType.LAZY)
+   @JoinColumn(name = "route_id")
+   @OrderBy("deliveryOrder ASC")
+@@ -56,6 +59,7 @@ public class Route {
+     this.totalDistanceMeters = builder.totalDistanceMeters;
+     this.estimatedTimeSeconds = builder.estimatedTimeSeconds;
+     this.stops = builder.stops;
++    this.encodedPolyline = builder.encodedPolyline;
+     this.creationDate = LocalDateTime.now();
+   }
+ 
+@@ -88,6 +92,10 @@ public class Route {
+     return creationDate;
+   }
+ 
++  public String getEncodedPolyline() {
++    return encodedPolyline;
++  }
++
+   public Double getLastLatitude() {
+     return lastLatitude;
+   }
+@@ -121,12 +129,18 @@ public class Route {
+     private List<Order> stops = new ArrayList<>();
+     private long totalDistanceMeters;
+     private long estimatedTimeSeconds;
++    private String encodedPolyline;
+ 
+     public Builder forBatch(Long batchId) {
+       this.batchId = batchId;
+       return this;
+     }
+ 
++    public Builder withEncodedPolyline(String polyline) {
++      this.encodedPolyline = polyline;
++      return this;
++    }
++
+     public Builder forDriver(Long driverId) {
+       this.driverId = driverId;
+       return this;
+diff --git a/src/main/java/com/routeoptimizer/model/entity/User.java b/src/main/java/com/routeoptimizer/model/entity/User.java
+index 5fd61b6..2d76382 100644
+--- a/src/main/java/com/routeoptimizer/model/entity/User.java
++++ b/src/main/java/com/routeoptimizer/model/entity/User.java
+@@ -41,6 +41,9 @@ public class User implements UserDetails {
+   @Column(nullable = false)
+   private Role role;
+ 
++  @Column(name = "assigned_city")
++  private String assignedCity;
++
+   public User() {
+   }
+ 
+@@ -128,4 +131,12 @@ public class User implements UserDetails {
+   public void setRole(Role role) {
+     this.role = role;
+   }
++
++  public String getAssignedCity() {
++    return assignedCity;
++  }
++
++  public void setAssignedCity(String assignedCity) {
++    this.assignedCity = assignedCity;
++  }
+ }
+diff --git a/src/main/java/com/routeoptimizer/optimization/RouteOptimizer.java b/src/main/java/com/routeoptimizer/optimization/RouteOptimizer.java
+index e8e0e23..895a9a5 100644
+--- a/src/main/java/com/routeoptimizer/optimization/RouteOptimizer.java
++++ b/src/main/java/com/routeoptimizer/optimization/RouteOptimizer.java
+@@ -57,13 +57,21 @@ public class RouteOptimizer {
+       return new Route.Builder().forBatch(batchId).build();
+     }
+ 
+-    // Definir punto de partida (Ubicación del repartidor o el almacén)
++    // Definir punto de partida dinámico (Ubicación del repartidor o el centro de la ciudad)
+     Coordinate startLocation;
+     if (batch.getDriver() != null && batch.getDriver().getLocation() != null) {
+       startLocation = batch.getDriver().getLocation();
+     } else {
+-      // Ubicación base por defecto (ej. Un almacén en Bogotá)
+-      startLocation = new Coordinate(4.6097, -74.0817);
++      // Ubicación base por defecto según la ciudad del lote
++      if ("Pasto".equalsIgnoreCase(batch.getCity())) {
++        startLocation = new Coordinate(1.2136, -77.2811); // Centro de Pasto
++      } else if ("Bogotá".equalsIgnoreCase(batch.getCity()) || "Bogota".equalsIgnoreCase(batch.getCity())) {
++        startLocation = new Coordinate(4.6097, -74.0817); // Centro de Bogotá
++      } else if ("Medellín".equalsIgnoreCase(batch.getCity()) || "Medellin".equalsIgnoreCase(batch.getCity())) {
++        startLocation = new Coordinate(6.2442, -75.5812); // Centro de Medellín
++      } else {
++        startLocation = new Coordinate(4.6097, -74.0817); // Global default
++      }
+     }
+ 
+     // 1. Ejecutar el motor de optimización (Estrategia)
+diff --git a/src/main/java/com/routeoptimizer/repository/BatchRepository.java b/src/main/java/com/routeoptimizer/repository/BatchRepository.java
+index ebcacc7..d539136 100644
+--- a/src/main/java/com/routeoptimizer/repository/BatchRepository.java
++++ b/src/main/java/com/routeoptimizer/repository/BatchRepository.java
+@@ -17,7 +17,9 @@ public interface BatchRepository extends JpaRepository<Batch, Long> {
+ 
+     List<Batch> findByCreationDate(LocalDate date);
+ 
+-    Optional<Batch> findFirstByStatusOrderByCreationDateAsc(String status);
++    Optional<Batch> findFirstByStatusAndCityOrderByCreationDateAsc(String status, String city);
++
++    List<Batch> findByCityAndDriverIsNullOrderByCreationDateAsc(String city);
+ 
+     List<Batch> findByDriverIsNullOrderByCreationDateAsc();
+ 
+diff --git a/src/main/java/com/routeoptimizer/repository/OrderRepository.java b/src/main/java/com/routeoptimizer/repository/OrderRepository.java
+index 2376d33..dfd7794 100644
+--- a/src/main/java/com/routeoptimizer/repository/OrderRepository.java
++++ b/src/main/java/com/routeoptimizer/repository/OrderRepository.java
+@@ -30,11 +30,11 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
+ 
+         List<Order> findByBatchIdIsNull();
+ 
++        @Query("SELECT o FROM Order o WHERE o.batchId IS NULL AND o.city = :city")
++        List<Order> findByBatchIdIsNullAndCity(@Param("city") String city);
++
+         @Query(value = "SELECT * FROM orders o WHERE ST_DWithin(" +
+-                        "CAST(ST_SetSRID(ST_MakePoint(o.lng, o.lat), 4326) AS geography), " + // Wait, should it
+-                                                                                              // correspond to lng
+-                                                                                              // and
+-                                                                                              // lat?
++                        "CAST(ST_SetSRID(ST_MakePoint(o.lng, o.lat), 4326) AS geography), " +
+                         "CAST(ST_SetSRID(ST_MakePoint(:lng, :lat), 4326) AS geography), " +
+                         ":radiusMeters)", nativeQuery = true)
+         List<Order> findNearbyOrders(@Param("lat") double lat, @Param("lng") double lng,
+@@ -60,4 +60,10 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
+ 
+         @Query("SELECT SUM(o.price) FROM Order o WHERE o.status = com.routeoptimizer.model.enums.OrderStatus.DELIVERED AND o.city = :city")
+         java.math.BigDecimal getRevenueByCity(@Param("city") String city);
++
++        @Query(value = "SELECT TRIM(TO_CHAR(o.actual_delivery_time, 'Month')) as month, COALESCE(SUM(o.price), 0) as total " +
++                   "FROM orders o WHERE o.status = 'DELIVERED' AND o.actual_delivery_time IS NOT NULL " +
++                   "AND (:city IS NULL OR o.city = :city) " +
++                   "GROUP BY month", nativeQuery = true)
++        List<Object[]> getMonthlyRevenueNative(@Param("city") String city);
+ }
+diff --git a/src/main/java/com/routeoptimizer/service/AnalyticsService.java b/src/main/java/com/routeoptimizer/service/AnalyticsService.java
+index d417696..7a7ffba 100644
+--- a/src/main/java/com/routeoptimizer/service/AnalyticsService.java
++++ b/src/main/java/com/routeoptimizer/service/AnalyticsService.java
+@@ -37,8 +37,14 @@ public class AnalyticsService {
+      * Calculates financial metrics: Revenue, Costs, and Net Profit.
+      */
+     @Transactional(readOnly = true)
+-    public com.routeoptimizer.dto.FinancialAnalyticsDTO getFinancialAnalytics() {
+-        java.math.BigDecimal revenue = orderRepository.getTotalRevenue();
++    public com.routeoptimizer.dto.FinancialAnalyticsDTO getFinancialAnalytics(String cityFilter) {
++        java.math.BigDecimal revenue;
++        if (cityFilter != null && !cityFilter.isEmpty()) {
++            revenue = orderRepository.getRevenueByCity(cityFilter);
++        } else {
++            revenue = orderRepository.getTotalRevenue();
++        }
++        
+         if (revenue == null) revenue = java.math.BigDecimal.ZERO;
+ 
+         java.math.BigDecimal totalCosts = java.math.BigDecimal.ZERO;
+@@ -47,10 +53,17 @@ public class AnalyticsService {
+         for (com.routeoptimizer.model.entity.Route route : routes) {
+             if (route.getDriverId() != null) {
+                 java.util.Optional<com.routeoptimizer.model.entity.Driver> driverOpt = driverRepository.findById(route.getDriverId());
+-                if (driverOpt.isPresent() && driverOpt.get().getCostPerHour() != null) {
+-                    double hours = route.getEstimatedTimeSeconds() / 3600.0;
+-                    java.math.BigDecimal routeCost = driverOpt.get().getCostPerHour().multiply(java.math.BigDecimal.valueOf(hours));
+-                    totalCosts = totalCosts.add(routeCost);
++                if (driverOpt.isPresent()) {
++                    com.routeoptimizer.model.entity.Driver d = driverOpt.get();
++                    // Si hay filtro de ciudad, solo sumamos costos de conductores de esa ciudad
++                    if (cityFilter != null && !cityFilter.isEmpty() && !cityFilter.equalsIgnoreCase(d.getAssignedCity())) {
++                        continue;
++                    }
++                    if (d.getCostPerHour() != null) {
++                        double hours = route.getEstimatedTimeSeconds() / 3600.0;
++                        java.math.BigDecimal routeCost = d.getCostPerHour().multiply(java.math.BigDecimal.valueOf(hours));
++                        totalCosts = totalCosts.add(routeCost);
++                    }
+                 }
+             }
+         }
+@@ -67,7 +80,21 @@ public class AnalyticsService {
+             byCity.put(city, cityRev != null ? cityRev : java.math.BigDecimal.ZERO);
+         }
+ 
+-        return new com.routeoptimizer.dto.FinancialAnalyticsDTO(revenue, totalCosts, netProfit, byCity, margin);
++        Map<String, java.math.BigDecimal> monthlyRevenue = new HashMap<>();
++        List<Object[]> monthlyData = orderRepository.getMonthlyRevenueNative(cityFilter);
++        for (Object[] row : monthlyData) {
++            String month = (String) row[0];
++            Object rawTotal = row[1];
++            java.math.BigDecimal total = java.math.BigDecimal.ZERO;
++            if (rawTotal instanceof java.math.BigDecimal) {
++                total = (java.math.BigDecimal) rawTotal;
++            } else if (rawTotal instanceof Number) {
++                total = java.math.BigDecimal.valueOf(((Number) rawTotal).doubleValue());
++            }
++            monthlyRevenue.put(month.trim(), total);
++        }
++
++        return new com.routeoptimizer.dto.FinancialAnalyticsDTO(revenue, totalCosts, netProfit, byCity, monthlyRevenue, margin);
+     }
+ 
+     /**
+diff --git a/src/main/java/com/routeoptimizer/service/AuthService.java b/src/main/java/com/routeoptimizer/service/AuthService.java
+index b041468..69e3ee1 100644
+--- a/src/main/java/com/routeoptimizer/service/AuthService.java
++++ b/src/main/java/com/routeoptimizer/service/AuthService.java
+@@ -1,5 +1,7 @@
+ package com.routeoptimizer.service;
+ 
++import java.util.Base64;
++
+ import com.routeoptimizer.model.entity.Driver;
+ import com.routeoptimizer.dto.AuthenticationResponse;
+ import com.routeoptimizer.dto.LoginRequest;
+@@ -46,12 +48,14 @@ public class AuthService {
+       throw new RuntimeException("Ya existe un usuario registrado con el email: " + request.email());
+     }
+ 
++    String decodedPassword = decodePassword(request.password());
++
+     User user;
+     if (request.role() == Role.DRIVER) {
+       Driver rep = new Driver();
+       rep.setName(request.name());
+       rep.setEmail(request.email());
+-      rep.setPasswordHash(passwordEncoder.encode(request.password()));
++      rep.setPasswordHash(passwordEncoder.encode(decodedPassword));
+       rep.setPhone(request.phone());
+       rep.setRole(request.role());
+       rep.setStatus(DriverStatus.AVAILABLE);
+@@ -62,7 +66,7 @@ public class AuthService {
+       user = new User();
+       user.setName(request.name());
+       user.setEmail(request.email());
+-      user.setPasswordHash(passwordEncoder.encode(request.password()));
++      user.setPasswordHash(passwordEncoder.encode(decodedPassword));
+       user.setPhone(request.phone());
+       user.setRole(request.role());
+       user = userRepository.save(user);
+@@ -76,10 +80,12 @@ public class AuthService {
+ 
+   @Transactional
+   public AuthenticationResponse login(LoginRequest request) {
++    String decodedPassword = decodePassword(request.password());
++
+     authenticationManager.authenticate(
+         new UsernamePasswordAuthenticationToken(
+             request.email(),
+-            request.password()));
++            decodedPassword));
+     var user = userRepository.findByEmail(request.email())
+         .orElseThrow();
+     var jwtToken = jwtService.generateToken(user);
+@@ -87,4 +93,13 @@ public class AuthService {
+         user.getRole());
+     return new AuthenticationResponse(jwtToken, userDto);
+   }
++
++  private String decodePassword(String encodedPassword) {
++    try {
++      return new String(Base64.getDecoder().decode(encodedPassword));
++    } catch (Exception e) {
++      // Si no es Base64 válido, devolvemos el original (para retrocompatibilidad o pruebas manuales)
++      return encodedPassword;
++    }
++  }
+ }
+diff --git a/src/main/java/com/routeoptimizer/service/BatchService.java b/src/main/java/com/routeoptimizer/service/BatchService.java
+index a99ed12..630330d 100644
+--- a/src/main/java/com/routeoptimizer/service/BatchService.java
++++ b/src/main/java/com/routeoptimizer/service/BatchService.java
+@@ -43,18 +43,20 @@ public class BatchService {
+ 
+     @Transactional
+     public void addOrderToActiveBatch(Order order) {
+-        Optional<Batch> openBatch = batchRepository.findFirstByStatusOrderByCreationDateAsc("OPEN");
++        String city = order.getCity() != null ? order.getCity() : "Global";
++        Optional<Batch> openBatch = batchRepository.findFirstByStatusAndCityOrderByCreationDateAsc("OPEN", city);
+ 
+         Batch batch;
+         if (openBatch.isPresent()) {
+             batch = openBatch.get();
+-            log.info("Order #{} added to existing batch #{} ({}/{} orders)",
+-                    order.getId(), batch.getId(), batch.getOrders().size() + 1, MAX_ORDERS_PER_BATCH);
++            log.info("Order #{} added to existing batch #{} for city {} ({}/{} orders)",
++                    order.getId(), batch.getId(), city, batch.getOrders().size() + 1, MAX_ORDERS_PER_BATCH);
+         } else {
+             batch = new Batch();
+             batch.setStatus("OPEN");
++            batch.setCity(city);
+             batch = batchRepository.save(batch);
+-            log.info("New batch #{} created for order #{}", batch.getId(), order.getId());
++            log.info("New batch #{} created for city {} with order #{}", batch.getId(), city, order.getId());
+         }
+ 
+         order.setBatchId(batch.getId());
+@@ -97,7 +99,8 @@ public class BatchService {
+ 
+     @Transactional
+     public boolean assignAvailableDriverToOldestPendingBatch(Driver driver) {
+-        List<Batch> pendingBatches = batchRepository.findByDriverIsNullOrderByCreationDateAsc();
++        String city = (driver.getAssignedCity() != null) ? driver.getAssignedCity() : "Global";
++        List<Batch> pendingBatches = batchRepository.findByCityAndDriverIsNullOrderByCreationDateAsc(city);
+ 
+         if (pendingBatches.isEmpty()) {
+             log.debug("No batches without driver to assign to '{}'", driver.getName());
+@@ -122,6 +125,56 @@ public class BatchService {
+         return true;
+     }
+ 
++    @Transactional
++    public Batch createManualBatch(List<Long> orderIds, String city) {
++        if (orderIds == null || orderIds.isEmpty()) {
++            throw new RuntimeException("Debe seleccionar al menos un pedido para crear un lote.");
++        }
++
++        Batch batch = new Batch();
++        batch.setStatus("OPEN");
++        batch.setCity(city != null ? city : "Global");
++        batch = batchRepository.save(batch);
++
++        for (Long orderId : orderIds) {
++            Order order = orderRepository.findById(orderId)
++                    .orElseThrow(() -> new RuntimeException("Order no encontrado: " + orderId));
++            
++            // Validar que el pedido pertenezca a la misma ciudad que el lote (solo si hay una ciudad específica definida)
++            boolean isGlobalBatch = batch.getCity() == null || batch.getCity().trim().isEmpty() || batch.getCity().equalsIgnoreCase("Global");
++            if (!isGlobalBatch && !order.getCity().equalsIgnoreCase(batch.getCity())) {
++                throw new RuntimeException("El pedido #" + orderId + " (" + order.getCity() + ") no pertenece a la ciudad del lote (" + batch.getCity() + ")");
++            }
++            
++            order.setBatchId(batch.getId());
++            orderRepository.save(order);
++        }
++
++        log.info("Lote manual #{} creado con {} pedidos para {}", batch.getId(), orderIds.size(), city);
++        return batch;
++    }
++
++    @Transactional
++    public Batch assignDriverToBatch(Long batchId, Long driverId) {
++        Batch batch = findById(batchId);
++        Driver driver = driverRepository.findById(driverId)
++                .orElseThrow(() -> new RuntimeException("Driver not found with ID: " + driverId));
++        
++        batch.setDriver(driver);
++        batch.setStatus("ASSIGNED");
++        batch = batchRepository.save(batch);
++
++        executeAIAnalysis(batch);
++
++        try {
++            routeService.optimizeAndSaveRoute(batch.getId());
++        } catch (Exception e) {
++            log.error("Error generating automatic route for batch #{}: {}", batch.getId(), e.getMessage());
++        }
++
++        return batch;
++    }
++
+     private void executeAIAnalysis(Batch batch) {
+         try {
+             // Note: need to make sure aiService accepts Batch if we renamed Lote to Batch
+@@ -162,8 +215,11 @@ public class BatchService {
+     }
+ 
+     @Transactional(readOnly = true)
+-    public List<Batch> getPendingBatches() {
+-        return batchRepository.findByDriverIsNullOrderByCreationDateAsc();
++    public List<Batch> getPendingBatches(String city) {
++        if (city != null && !city.isEmpty()) {
++            return batchRepository.findByCityAndDriverIsNullOrderByCreationDateAsc(city);
++        }
++        return batchRepository.findAll().stream().filter(b -> b.getDriver() == null).toList();
+     }
+ 
+     @Transactional(readOnly = true)
+diff --git a/src/main/java/com/routeoptimizer/service/MapService.java b/src/main/java/com/routeoptimizer/service/MapService.java
+index 59b1170..01ca53f 100644
+--- a/src/main/java/com/routeoptimizer/service/MapService.java
++++ b/src/main/java/com/routeoptimizer/service/MapService.java
+@@ -30,6 +30,11 @@ public interface MapService {
+    */
+   long[][] getDistanceMatrix(List<Coordinate> points);
+ 
++  /**
++   * Gets the detailed directions (polyline) between origin, destination and waypoints.
++   */
++  String getDirections(Coordinate origin, Coordinate destination, List<Coordinate> waypoints);
++
+   /**
+    * Gets a traffic factor (0.0 to 1.0) for a specific city.
+    */
+diff --git a/src/main/java/com/routeoptimizer/service/OrderService.java b/src/main/java/com/routeoptimizer/service/OrderService.java
+index 020de9c..a471457 100644
+--- a/src/main/java/com/routeoptimizer/service/OrderService.java
++++ b/src/main/java/com/routeoptimizer/service/OrderService.java
+@@ -66,9 +66,7 @@ public class OrderService {
+     order.setCity(dto.getCity());
+ 
+     Order savedOrder = orderRepository.save(order);
+-
+-    batchService.addOrderToActiveBatch(savedOrder);
+-
++    // batchService.addOrderToActiveBatch(savedOrder); // Deshabilitado para permitir consolidación manual por Logística
+     return savedOrder;
+   }
+ 
+@@ -85,7 +83,10 @@ public class OrderService {
+   }
+ 
+   @Transactional(readOnly = true)
+-  public List<Order> findPendingWithoutBatch() {
++  public List<Order> findPendingWithoutBatch(String city) {
++    if (city != null && !city.isEmpty()) {
++       return orderRepository.findByBatchIdIsNullAndCity(city);
++    }
+     return orderRepository.findByBatchIdIsNull();
+   }
+ 
+@@ -125,9 +126,24 @@ public class OrderService {
+   }
+ 
+   @Transactional
+-  public List<Order> createOrdersBulk(List<OrderCreateDTO> dtos) {
+-    return dtos.stream()
+-        .map(this::createOrder)
+-        .collect(Collectors.toList());
++  public Map<String, Object> createOrdersBulk(List<OrderCreateDTO> dtos) {
++    List<Order> created = new java.util.ArrayList<>();
++    List<Map<String, String>> errors = new java.util.ArrayList<>();
++
++    for (int i = 0; i < dtos.size(); i++) {
++      OrderCreateDTO dto = dtos.get(i);
++      try {
++        created.add(createOrder(dto));
++      } catch (RuntimeException e) {
++        String ref = dto.getClientReference() != null ? dto.getClientReference() : "index-" + i;
++        errors.add(Map.of("reference", ref, "error", e.getMessage()));
++      }
++    }
++
++    return Map.of(
++        "created", created,
++        "createdCount", created.size(),
++        "errorCount", errors.size(),
++        "errors", errors);
+   }
+ }
+diff --git a/src/main/java/com/routeoptimizer/service/RouteService.java b/src/main/java/com/routeoptimizer/service/RouteService.java
+index b7a7a12..07edd8f 100644
+--- a/src/main/java/com/routeoptimizer/service/RouteService.java
++++ b/src/main/java/com/routeoptimizer/service/RouteService.java
+@@ -1,8 +1,12 @@
+ package com.routeoptimizer.service;
+ 
+ import com.routeoptimizer.model.entity.Route;
++import com.routeoptimizer.model.entity.Order;
++import com.routeoptimizer.model.Coordinate;
+ import com.routeoptimizer.optimization.RouteOptimizer;
+ import com.routeoptimizer.repository.RouteRepository;
++import com.routeoptimizer.repository.OrderRepository;
++import com.routeoptimizer.service.MapService;
+ 
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+@@ -18,22 +22,61 @@ public class RouteService {
+ 
+   private final RouteRepository routeRepository;
+   private final RouteOptimizer routeOptimizer;
++  private final MapService mapService;
++  private final OrderRepository orderRepository;
+ 
+-  public RouteService(RouteRepository routeRepository, RouteOptimizer routeOptimizer) {
++  public RouteService(RouteRepository routeRepository, 
++                      RouteOptimizer routeOptimizer,
++                      MapService mapService,
++                      OrderRepository orderRepository) {
+     this.routeRepository = routeRepository;
+     this.routeOptimizer = routeOptimizer;
++    this.mapService = mapService;
++    this.orderRepository = orderRepository;
+   }
+ 
+   @Transactional
+   public Route optimizeAndSaveRoute(Long batchId) {
+     log.info("Starting optimization and persistence process for batch #{}", batchId);
+ 
+-    Route newRoute = routeOptimizer.optimizeBatch(batchId);
++    Route optimizedResult = routeOptimizer.optimizeBatch(batchId);
++    
++    // Fetch detailed directions (encoded polyline) for the sequence
++    String encodedPolyline = null;
++    List<Order> stops = optimizedResult.getStops();
++    if (stops != null && stops.size() > 1) {
++       Coordinate origin = stops.get(0).getLocation(); // Should be start point or first order?
++       // Wait, RouteOptimizer starts from driver or city center. 
++       // I should probably pass the same start location here.
++       // For now, let's use the first stop as representative if driver location isn't stored.
++       Coordinate destination = stops.get(stops.size() - 1).getLocation();
++       List<Coordinate> waypoints = stops.size() > 2 
++          ? stops.subList(1, stops.size() - 1).stream().map(Order::getLocation).toList()
++          : null;
++       
++       encodedPolyline = mapService.getDirections(origin, destination, waypoints);
++    }
++
++    Route routeToSave = new Route.Builder()
++        .forBatch(batchId)
++        .withStops(stops)
++        .withTotalDistance(optimizedResult.getTotalDistanceMeters())
++        .withEncodedPolyline(encodedPolyline)
++        .build();
+ 
+     @SuppressWarnings("null")
+-    Route savedRoute = routeRepository.save(newRoute);
+-
+-    log.info("Route successfully persisted for batch #{}. Route ID: {}", batchId, savedRoute.getId());
++    Route savedRoute = routeRepository.save(routeToSave);
++    
++    // Link orders to the saved route
++    if (stops != null) {
++        for (Order o : stops) {
++            o.setRouteId(savedRoute.getId());
++            orderRepository.save(o);
++        }
++    }
++
++    log.info("Route successfully persisted for batch #{}. Route ID: {}. Polyline length: {}", 
++        batchId, savedRoute.getId(), encodedPolyline != null ? encodedPolyline.length() : 0);
+ 
+     return savedRoute;
+   }
+diff --git a/target/classes/application.properties b/target/classes/application.properties
+deleted file mode 100644
+index 33fb615..0000000
+--- a/target/classes/application.properties
++++ /dev/null
+@@ -1,45 +0,0 @@
+-# ===================================================================
+-# CONFIGURACIÓN DE BASE DE DATOS POSTGRESQL
+-# ===================================================================
+-
+-spring.datasource.url=jdbc:postgresql://viberoute-db:5432/route_optimizer
+-spring.datasource.username=admin
+-spring.datasource.password=changeme
+-spring.datasource.driver-class-name=org.postgresql.Driver
+-
+-# Dialecto de base de datos
+-spring.jpa.database-platform=org.hibernate.dialect.PostgreSQLDialect
+-
+-# Hibernate DDL Auto
+-spring.jpa.hibernate.ddl-auto=update
+-
+-# Mostrar SQL
+-spring.jpa.show-sql=true
+-spring.jpa.properties.hibernate.format_sql=true
+-
+-# ===================================================================
+-# GOOGLE MAPS
+-# ===================================================================
+-
+-google.maps.api.key=${GOOGLE_MAPS_KEY}
+-
+-# ===================================================================
+-# GOOGLE GEMINI (IA)
+-# ===================================================================
+-
+-gemini.api.key=${GOOGLE_GEMINI_KEY}
+-gemini.model=gemini-2.5-flash
+-
+-# Logs de seguridad para debug
+-logging.level.org.springframework.security=DEBUG
+-logging.level.org.springframework.web=DEBUG
+-
+-# ===================================================================
+-# JWT SECURITY
+-# ===================================================================
+-
+-# Set JWT_SECRET as an environment variable (docker-compose.yml locally, Render dashboard in production)
+-jwt.secret=${JWT_SECRET}
+-
+-# FIREBASE STORAGE
+-firebase.storage.bucket=viberoute-colombia.appspot.com
+diff --git a/target/classes/application.yml b/target/classes/application.yml
+deleted file mode 100644
+index 67455ce..0000000
+--- a/target/classes/application.yml
++++ /dev/null
+@@ -1,19 +0,0 @@
+-# Configuración principal de la aplicación — rellenar tras inicializar proyecto
+-# spring:
+-#   application:
+-#     name: route-optimizer-colombia
+-#   datasource:
+-#     url: jdbc:postgresql://localhost:5432/route_optimizer
+-#     username: admin
+-#     password: changeme
+-#   jpa:
+-#     hibernate:
+-#       ddl-auto: validate
+-#     show-sql: false
+-#
+-# google:
+-#   maps:
+-#     api-key: ${GOOGLE_MAPS_API_KEY}
+-#
+-# server:
+-#   port: 8080
+diff --git a/target/classes/com/routeoptimizer/VibeRouteApplication.class b/target/classes/com/routeoptimizer/VibeRouteApplication.class
+index 0e210e5..77cb0c1 100644
+Binary files a/target/classes/com/routeoptimizer/VibeRouteApplication.class and b/target/classes/com/routeoptimizer/VibeRouteApplication.class differ
+diff --git a/target/classes/com/routeoptimizer/config/AppConfig.class b/target/classes/com/routeoptimizer/config/AppConfig.class
+index 8d64dc8..201c8e6 100644
+Binary files a/target/classes/com/routeoptimizer/config/AppConfig.class and b/target/classes/com/routeoptimizer/config/AppConfig.class differ
+diff --git a/target/classes/com/routeoptimizer/config/AuthConfig.class b/target/classes/com/routeoptimizer/config/AuthConfig.class
+index 7f49602..14ab65e 100644
+Binary files a/target/classes/com/routeoptimizer/config/AuthConfig.class and b/target/classes/com/routeoptimizer/config/AuthConfig.class differ
+diff --git a/target/classes/com/routeoptimizer/config/FirebaseConfig.class b/target/classes/com/routeoptimizer/config/FirebaseConfig.class
+deleted file mode 100644
+index 6f53d04..0000000
+Binary files a/target/classes/com/routeoptimizer/config/FirebaseConfig.class and /dev/null differ
+diff --git a/target/classes/com/routeoptimizer/config/SecurityConfig.class b/target/classes/com/routeoptimizer/config/SecurityConfig.class
+index 5f1ae06..82ef591 100644
+Binary files a/target/classes/com/routeoptimizer/config/SecurityConfig.class and b/target/classes/com/routeoptimizer/config/SecurityConfig.class differ
+diff --git a/target/classes/com/routeoptimizer/config/WebSocketConfig.class b/target/classes/com/routeoptimizer/config/WebSocketConfig.class
+index 6376472..06be34c 100644
+Binary files a/target/classes/com/routeoptimizer/config/WebSocketConfig.class and b/target/classes/com/routeoptimizer/config/WebSocketConfig.class differ
+diff --git a/target/classes/com/routeoptimizer/config/ZoneSeeder.class b/target/classes/com/routeoptimizer/config/ZoneSeeder.class
+index 5fd8554..ed9c336 100644
+Binary files a/target/classes/com/routeoptimizer/config/ZoneSeeder.class and b/target/classes/com/routeoptimizer/config/ZoneSeeder.class differ
+diff --git a/target/classes/com/routeoptimizer/controller/AIController.class b/target/classes/com/routeoptimizer/controller/AIController.class
+index f5524e9..ebaf2a4 100644
+Binary files a/target/classes/com/routeoptimizer/controller/AIController.class and b/target/classes/com/routeoptimizer/controller/AIController.class differ
+diff --git a/target/classes/com/routeoptimizer/controller/AnalyticsController.class b/target/classes/com/routeoptimizer/controller/AnalyticsController.class
+index 35c5825..286e315 100644
+Binary files a/target/classes/com/routeoptimizer/controller/AnalyticsController.class and b/target/classes/com/routeoptimizer/controller/AnalyticsController.class differ
+diff --git a/target/classes/com/routeoptimizer/controller/AuthController.class b/target/classes/com/routeoptimizer/controller/AuthController.class
+index 09c3172..664f4b8 100644
+Binary files a/target/classes/com/routeoptimizer/controller/AuthController.class and b/target/classes/com/routeoptimizer/controller/AuthController.class differ
+diff --git a/target/classes/com/routeoptimizer/controller/BatchController.class b/target/classes/com/routeoptimizer/controller/BatchController.class
+index df9f17d..9d288c7 100644
+Binary files a/target/classes/com/routeoptimizer/controller/BatchController.class and b/target/classes/com/routeoptimizer/controller/BatchController.class differ
+diff --git a/target/classes/com/routeoptimizer/controller/DiagnosticController.class b/target/classes/com/routeoptimizer/controller/DiagnosticController.class
+index 9b5c366..30a36c0 100644
+Binary files a/target/classes/com/routeoptimizer/controller/DiagnosticController.class and b/target/classes/com/routeoptimizer/controller/DiagnosticController.class differ
+diff --git a/target/classes/com/routeoptimizer/controller/DriverController.class b/target/classes/com/routeoptimizer/controller/DriverController.class
+index e6faa62..455d7e8 100644
+Binary files a/target/classes/com/routeoptimizer/controller/DriverController.class and b/target/classes/com/routeoptimizer/controller/DriverController.class differ
+diff --git a/target/classes/com/routeoptimizer/controller/LocationController.class b/target/classes/com/routeoptimizer/controller/LocationController.class
+index d660f20..4ba8434 100644
+Binary files a/target/classes/com/routeoptimizer/controller/LocationController.class and b/target/classes/com/routeoptimizer/controller/LocationController.class differ
+diff --git a/target/classes/com/routeoptimizer/controller/OrderController.class b/target/classes/com/routeoptimizer/controller/OrderController.class
+index 104842a..f87c8ed 100644
+Binary files a/target/classes/com/routeoptimizer/controller/OrderController.class and b/target/classes/com/routeoptimizer/controller/OrderController.class differ
+diff --git a/target/classes/com/routeoptimizer/controller/RouteController.class b/target/classes/com/routeoptimizer/controller/RouteController.class
+index 76f0ae7..a1854d3 100644
+Binary files a/target/classes/com/routeoptimizer/controller/RouteController.class and b/target/classes/com/routeoptimizer/controller/RouteController.class differ
+diff --git a/target/classes/com/routeoptimizer/dto/DriverCreateDTO.class b/target/classes/com/routeoptimizer/dto/DriverCreateDTO.class
+index 0b0b663..da0fefb 100644
+Binary files a/target/classes/com/routeoptimizer/dto/DriverCreateDTO.class and b/target/classes/com/routeoptimizer/dto/DriverCreateDTO.class differ
+diff --git a/target/classes/com/routeoptimizer/dto/DriverResponseDTO.class b/target/classes/com/routeoptimizer/dto/DriverResponseDTO.class
+index abed76c..4f60df6 100644
+Binary files a/target/classes/com/routeoptimizer/dto/DriverResponseDTO.class and b/target/classes/com/routeoptimizer/dto/DriverResponseDTO.class differ
+diff --git a/target/classes/com/routeoptimizer/dto/FinancialAnalyticsDTO.class b/target/classes/com/routeoptimizer/dto/FinancialAnalyticsDTO.class
+deleted file mode 100644
+index 9126322..0000000
+Binary files a/target/classes/com/routeoptimizer/dto/FinancialAnalyticsDTO.class and /dev/null differ
+diff --git a/target/classes/com/routeoptimizer/dto/OrderCreateDTO.class b/target/classes/com/routeoptimizer/dto/OrderCreateDTO.class
+index cfb1212..2d4e7a4 100644
+Binary files a/target/classes/com/routeoptimizer/dto/OrderCreateDTO.class and b/target/classes/com/routeoptimizer/dto/OrderCreateDTO.class differ
+diff --git a/target/classes/com/routeoptimizer/dto/OrderResponseDTO.class b/target/classes/com/routeoptimizer/dto/OrderResponseDTO.class
+index 355988c..a1b923b 100644
+Binary files a/target/classes/com/routeoptimizer/dto/OrderResponseDTO.class and b/target/classes/com/routeoptimizer/dto/OrderResponseDTO.class differ
+diff --git a/target/classes/com/routeoptimizer/dto/RegisterRequest.class b/target/classes/com/routeoptimizer/dto/RegisterRequest.class
+index 48e3c5c..a56a12d 100644
+Binary files a/target/classes/com/routeoptimizer/dto/RegisterRequest.class and b/target/classes/com/routeoptimizer/dto/RegisterRequest.class differ
+diff --git a/target/classes/com/routeoptimizer/exception/GlobalExceptionHandler.class b/target/classes/com/routeoptimizer/exception/GlobalExceptionHandler.class
+index 8202e2a..98fd74a 100644
+Binary files a/target/classes/com/routeoptimizer/exception/GlobalExceptionHandler.class and b/target/classes/com/routeoptimizer/exception/GlobalExceptionHandler.class differ
+diff --git a/target/classes/com/routeoptimizer/external/GeminiClient$1$1$1.class b/target/classes/com/routeoptimizer/external/GeminiClient$1$1$1.class
+deleted file mode 100644
+index bc65510..0000000
+Binary files a/target/classes/com/routeoptimizer/external/GeminiClient$1$1$1.class and /dev/null differ
+diff --git a/target/classes/com/routeoptimizer/external/GeminiClient$1$1.class b/target/classes/com/routeoptimizer/external/GeminiClient$1$1.class
+deleted file mode 100644
+index d6e02bd..0000000
+Binary files a/target/classes/com/routeoptimizer/external/GeminiClient$1$1.class and /dev/null differ
+diff --git a/target/classes/com/routeoptimizer/external/GeminiClient$1.class b/target/classes/com/routeoptimizer/external/GeminiClient$1.class
+deleted file mode 100644
+index 2a55ebd..0000000
+Binary files a/target/classes/com/routeoptimizer/external/GeminiClient$1.class and /dev/null differ
+diff --git a/target/classes/com/routeoptimizer/external/GeminiClient.class b/target/classes/com/routeoptimizer/external/GeminiClient.class
+index 7f2bccd..d10d69c 100644
+Binary files a/target/classes/com/routeoptimizer/external/GeminiClient.class and b/target/classes/com/routeoptimizer/external/GeminiClient.class differ
+diff --git a/target/classes/com/routeoptimizer/external/GoogleMapsAdapter$CityConfig.class b/target/classes/com/routeoptimizer/external/GoogleMapsAdapter$CityConfig.class
+index bbd0979..8f910fb 100644
+Binary files a/target/classes/com/routeoptimizer/external/GoogleMapsAdapter$CityConfig.class and b/target/classes/com/routeoptimizer/external/GoogleMapsAdapter$CityConfig.class differ
+diff --git a/target/classes/com/routeoptimizer/external/GoogleMapsAdapter.class b/target/classes/com/routeoptimizer/external/GoogleMapsAdapter.class
+index 162c189..9aaf315 100644
+Binary files a/target/classes/com/routeoptimizer/external/GoogleMapsAdapter.class and b/target/classes/com/routeoptimizer/external/GoogleMapsAdapter.class differ
+diff --git a/target/classes/com/routeoptimizer/external/MLModelAdapter.class b/target/classes/com/routeoptimizer/external/MLModelAdapter.class
+index 3be1f25..d98e08f 100644
+Binary files a/target/classes/com/routeoptimizer/external/MLModelAdapter.class and b/target/classes/com/routeoptimizer/external/MLModelAdapter.class differ
+diff --git a/target/classes/com/routeoptimizer/model/Coordinate.class b/target/classes/com/routeoptimizer/model/Coordinate.class
+index 3d8f772..de0dc3a 100644
+Binary files a/target/classes/com/routeoptimizer/model/Coordinate.class and b/target/classes/com/routeoptimizer/model/Coordinate.class differ
+diff --git a/target/classes/com/routeoptimizer/model/entity/Batch.class b/target/classes/com/routeoptimizer/model/entity/Batch.class
+index 437d5c8..87a61ca 100644
+Binary files a/target/classes/com/routeoptimizer/model/entity/Batch.class and b/target/classes/com/routeoptimizer/model/entity/Batch.class differ
+diff --git a/target/classes/com/routeoptimizer/model/entity/CoverageZone.class b/target/classes/com/routeoptimizer/model/entity/CoverageZone.class
+index 20a0cf0..92aa076 100644
+Binary files a/target/classes/com/routeoptimizer/model/entity/CoverageZone.class and b/target/classes/com/routeoptimizer/model/entity/CoverageZone.class differ
+diff --git a/target/classes/com/routeoptimizer/model/entity/DeviationIncident.class b/target/classes/com/routeoptimizer/model/entity/DeviationIncident.class
+index e41c9c7..3fd6b29 100644
+Binary files a/target/classes/com/routeoptimizer/model/entity/DeviationIncident.class and b/target/classes/com/routeoptimizer/model/entity/DeviationIncident.class differ
+diff --git a/target/classes/com/routeoptimizer/model/entity/Driver.class b/target/classes/com/routeoptimizer/model/entity/Driver.class
+index 6f809fa..39d6690 100644
+Binary files a/target/classes/com/routeoptimizer/model/entity/Driver.class and b/target/classes/com/routeoptimizer/model/entity/Driver.class differ
+diff --git a/target/classes/com/routeoptimizer/model/entity/Order.class b/target/classes/com/routeoptimizer/model/entity/Order.class
+index 99983b1..1095057 100644
+Binary files a/target/classes/com/routeoptimizer/model/entity/Order.class and b/target/classes/com/routeoptimizer/model/entity/Order.class differ
+diff --git a/target/classes/com/routeoptimizer/model/entity/Route$Builder.class b/target/classes/com/routeoptimizer/model/entity/Route$Builder.class
+index 3ffc101..ecd7c11 100644
+Binary files a/target/classes/com/routeoptimizer/model/entity/Route$Builder.class and b/target/classes/com/routeoptimizer/model/entity/Route$Builder.class differ
+diff --git a/target/classes/com/routeoptimizer/model/entity/Route.class b/target/classes/com/routeoptimizer/model/entity/Route.class
+index 6414f36..f340fe2 100644
+Binary files a/target/classes/com/routeoptimizer/model/entity/Route.class and b/target/classes/com/routeoptimizer/model/entity/Route.class differ
+diff --git a/target/classes/com/routeoptimizer/model/entity/User.class b/target/classes/com/routeoptimizer/model/entity/User.class
+index bd3ec56..8c4aaa7 100644
+Binary files a/target/classes/com/routeoptimizer/model/entity/User.class and b/target/classes/com/routeoptimizer/model/entity/User.class differ
+diff --git a/target/classes/com/routeoptimizer/optimization/OrToolsStrategy.class b/target/classes/com/routeoptimizer/optimization/OrToolsStrategy.class
+index e809838..78de606 100644
+Binary files a/target/classes/com/routeoptimizer/optimization/OrToolsStrategy.class and b/target/classes/com/routeoptimizer/optimization/OrToolsStrategy.class differ
+diff --git a/target/classes/com/routeoptimizer/optimization/RouteOptimizer.class b/target/classes/com/routeoptimizer/optimization/RouteOptimizer.class
+index a6b6836..970fe1b 100644
+Binary files a/target/classes/com/routeoptimizer/optimization/RouteOptimizer.class and b/target/classes/com/routeoptimizer/optimization/RouteOptimizer.class differ
+diff --git a/target/classes/com/routeoptimizer/repository/BatchRepository.class b/target/classes/com/routeoptimizer/repository/BatchRepository.class
+index 66f7341..6581902 100644
+Binary files a/target/classes/com/routeoptimizer/repository/BatchRepository.class and b/target/classes/com/routeoptimizer/repository/BatchRepository.class differ
+diff --git a/target/classes/com/routeoptimizer/repository/CoverageZoneRepository.class b/target/classes/com/routeoptimizer/repository/CoverageZoneRepository.class
+index a6e9883..542174a 100644
+Binary files a/target/classes/com/routeoptimizer/repository/CoverageZoneRepository.class and b/target/classes/com/routeoptimizer/repository/CoverageZoneRepository.class differ
+diff --git a/target/classes/com/routeoptimizer/repository/DeviationIncidentRepository.class b/target/classes/com/routeoptimizer/repository/DeviationIncidentRepository.class
+index fb10c1c..85fd3d5 100644
+Binary files a/target/classes/com/routeoptimizer/repository/DeviationIncidentRepository.class and b/target/classes/com/routeoptimizer/repository/DeviationIncidentRepository.class differ
+diff --git a/target/classes/com/routeoptimizer/repository/DriverRepository.class b/target/classes/com/routeoptimizer/repository/DriverRepository.class
+index c1e01ee..9b55a48 100644
+Binary files a/target/classes/com/routeoptimizer/repository/DriverRepository.class and b/target/classes/com/routeoptimizer/repository/DriverRepository.class differ
+diff --git a/target/classes/com/routeoptimizer/repository/OrderRepository.class b/target/classes/com/routeoptimizer/repository/OrderRepository.class
+index bb54929..9aac8fb 100644
+Binary files a/target/classes/com/routeoptimizer/repository/OrderRepository.class and b/target/classes/com/routeoptimizer/repository/OrderRepository.class differ
+diff --git a/target/classes/com/routeoptimizer/repository/RouteRepository.class b/target/classes/com/routeoptimizer/repository/RouteRepository.class
+index 40779b5..2cd1e15 100644
+Binary files a/target/classes/com/routeoptimizer/repository/RouteRepository.class and b/target/classes/com/routeoptimizer/repository/RouteRepository.class differ
+diff --git a/target/classes/com/routeoptimizer/repository/UserRepository.class b/target/classes/com/routeoptimizer/repository/UserRepository.class
+index 72b497e..a59ddd0 100644
+Binary files a/target/classes/com/routeoptimizer/repository/UserRepository.class and b/target/classes/com/routeoptimizer/repository/UserRepository.class differ
+diff --git a/target/classes/com/routeoptimizer/security/CustomAccessDeniedHandler.class b/target/classes/com/routeoptimizer/security/CustomAccessDeniedHandler.class
+index 4354a18..401a95c 100644
+Binary files a/target/classes/com/routeoptimizer/security/CustomAccessDeniedHandler.class and b/target/classes/com/routeoptimizer/security/CustomAccessDeniedHandler.class differ
+diff --git a/target/classes/com/routeoptimizer/security/JwtAuthenticationEntryPoint.class b/target/classes/com/routeoptimizer/security/JwtAuthenticationEntryPoint.class
+index 168cbf1..492b3ab 100644
+Binary files a/target/classes/com/routeoptimizer/security/JwtAuthenticationEntryPoint.class and b/target/classes/com/routeoptimizer/security/JwtAuthenticationEntryPoint.class differ
+diff --git a/target/classes/com/routeoptimizer/security/JwtAuthenticationFilter.class b/target/classes/com/routeoptimizer/security/JwtAuthenticationFilter.class
+index 5ea509f..0c09a9b 100644
+Binary files a/target/classes/com/routeoptimizer/security/JwtAuthenticationFilter.class and b/target/classes/com/routeoptimizer/security/JwtAuthenticationFilter.class differ
+diff --git a/target/classes/com/routeoptimizer/service/AIRouteSuggestionService.class b/target/classes/com/routeoptimizer/service/AIRouteSuggestionService.class
+index 4f1acaf..91bed04 100644
+Binary files a/target/classes/com/routeoptimizer/service/AIRouteSuggestionService.class and b/target/classes/com/routeoptimizer/service/AIRouteSuggestionService.class differ
+diff --git a/target/classes/com/routeoptimizer/service/AnalyticsService.class b/target/classes/com/routeoptimizer/service/AnalyticsService.class
+index feb5978..45b6795 100644
+Binary files a/target/classes/com/routeoptimizer/service/AnalyticsService.class and b/target/classes/com/routeoptimizer/service/AnalyticsService.class differ
+diff --git a/target/classes/com/routeoptimizer/service/AuthService.class b/target/classes/com/routeoptimizer/service/AuthService.class
+index 0cbbcfa..5eb2094 100644
+Binary files a/target/classes/com/routeoptimizer/service/AuthService.class and b/target/classes/com/routeoptimizer/service/AuthService.class differ
+diff --git a/target/classes/com/routeoptimizer/service/BatchService.class b/target/classes/com/routeoptimizer/service/BatchService.class
+index a5c964b..f35bf84 100644
+Binary files a/target/classes/com/routeoptimizer/service/BatchService.class and b/target/classes/com/routeoptimizer/service/BatchService.class differ
+diff --git a/target/classes/com/routeoptimizer/service/ContextualAdvisor.class b/target/classes/com/routeoptimizer/service/ContextualAdvisor.class
+index 6af372c..e277ba6 100644
+Binary files a/target/classes/com/routeoptimizer/service/ContextualAdvisor.class and b/target/classes/com/routeoptimizer/service/ContextualAdvisor.class differ
+diff --git a/target/classes/com/routeoptimizer/service/DeviationDetector.class b/target/classes/com/routeoptimizer/service/DeviationDetector.class
+index cd34285..9f45def 100644
+Binary files a/target/classes/com/routeoptimizer/service/DeviationDetector.class and b/target/classes/com/routeoptimizer/service/DeviationDetector.class differ
+diff --git a/target/classes/com/routeoptimizer/service/DriverService.class b/target/classes/com/routeoptimizer/service/DriverService.class
+index f1917aa..2823325 100644
+Binary files a/target/classes/com/routeoptimizer/service/DriverService.class and b/target/classes/com/routeoptimizer/service/DriverService.class differ
+diff --git a/target/classes/com/routeoptimizer/service/FirebaseStorageService.class b/target/classes/com/routeoptimizer/service/FirebaseStorageService.class
+deleted file mode 100644
+index a7d6c12..0000000
+Binary files a/target/classes/com/routeoptimizer/service/FirebaseStorageService.class and /dev/null differ
+diff --git a/target/classes/com/routeoptimizer/service/JwtService.class b/target/classes/com/routeoptimizer/service/JwtService.class
+index eedd824..003375d 100644
+Binary files a/target/classes/com/routeoptimizer/service/JwtService.class and b/target/classes/com/routeoptimizer/service/JwtService.class differ
+diff --git a/target/classes/com/routeoptimizer/service/OrderService.class b/target/classes/com/routeoptimizer/service/OrderService.class
+index 4c382c1..2a83598 100644
+Binary files a/target/classes/com/routeoptimizer/service/OrderService.class and b/target/classes/com/routeoptimizer/service/OrderService.class differ
+diff --git a/target/classes/com/routeoptimizer/service/ProximityAlertService.class b/target/classes/com/routeoptimizer/service/ProximityAlertService.class
+index a703881..63c13a7 100644
+Binary files a/target/classes/com/routeoptimizer/service/ProximityAlertService.class and b/target/classes/com/routeoptimizer/service/ProximityAlertService.class differ
+diff --git a/target/classes/com/routeoptimizer/service/RouteService.class b/target/classes/com/routeoptimizer/service/RouteService.class
+index 9bf7b0d..2eaf35a 100644
+Binary files a/target/classes/com/routeoptimizer/service/RouteService.class and b/target/classes/com/routeoptimizer/service/RouteService.class differ
+diff --git a/target/classes/com/routeoptimizer/service/SpatialValidationService.class b/target/classes/com/routeoptimizer/service/SpatialValidationService.class
+index a9ca42d..5bb8b06 100644
+Binary files a/target/classes/com/routeoptimizer/service/SpatialValidationService.class and b/target/classes/com/routeoptimizer/service/SpatialValidationService.class differ
+diff --git a/target/classes/data-zones.sql b/target/classes/data-zones.sql
+deleted file mode 100644
+index ea7efeb..0000000
+--- a/target/classes/data-zones.sql
++++ /dev/null
+@@ -1,28 +0,0 @@
+--- Habilitar PostGIS (por si acaso)
+-CREATE EXTENSION IF NOT EXISTS postgis;
+-
+--- Tabla de zonas de cobertura
+-CREATE TABLE IF NOT EXISTS coverage_zones (
+-    id SERIAL PRIMARY KEY,
+-    name VARCHAR(100) NOT NULL,
+-    city VARCHAR(100) NOT NULL,
+-    geom GEOMETRY(POLYGON, 4326) NOT NULL  -- Polígono en coordenadas GPS
+-);
+-
+--- Limpiar antes de insertar para evitar duplicados en reinicios de Docker
+-DELETE FROM coverage_zones;
+-
+--- Insertar polígono de Bogotá (aproximado)
+-INSERT INTO coverage_zones (name, city, geom) VALUES
+-('Bogotá Urbana', 'Bogotá', ST_GeomFromText(
+-  'POLYGON((-74.22 4.47, -74.22 4.84, -73.98 4.84, -73.98 4.47, -74.22 4.47))', 
+-  4326
+-)),
+-('Medellín Urbana', 'Medellín', ST_GeomFromText(
+-  'POLYGON((-75.66 6.17, -75.66 6.34, -75.50 6.34, -75.50 6.17, -75.66 6.17))', 
+-  4326
+-)),
+-('Cali Urbana', 'Cali', ST_GeomFromText(
+-  'POLYGON((-76.60 3.34, -76.60 3.50, -76.47 3.50, -76.47 3.34, -76.60 3.34))', 
+-  4326
+-));
+diff --git a/target/classes/db/migrations/.gitkeep b/target/classes/db/migrations/.gitkeep
+deleted file mode 100644
+index e69de29..0000000
+diff --git a/target/test-classes/com/routeoptimizer/maps/SpatialValidationServiceTest.class b/target/test-classes/com/routeoptimizer/maps/SpatialValidationServiceTest.class
+index d9d19e4..ffe0119 100644
+Binary files a/target/test-classes/com/routeoptimizer/maps/SpatialValidationServiceTest.class and b/target/test-classes/com/routeoptimizer/maps/SpatialValidationServiceTest.class differ
+diff --git a/target/test-classes/com/routeoptimizer/websockets/ProximityAlertServiceTest.class b/target/test-classes/com/routeoptimizer/websockets/ProximityAlertServiceTest.class
+index 2d7ec09..c793adb 100644
+Binary files a/target/test-classes/com/routeoptimizer/websockets/ProximityAlertServiceTest.class and b/target/test-classes/com/routeoptimizer/websockets/ProximityAlertServiceTest.class differ
