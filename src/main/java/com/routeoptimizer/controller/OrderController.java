@@ -87,19 +87,30 @@ public class OrderController {
 
   @PostMapping("/bulk")
   public ResponseEntity<?> createOrdersBulk(@RequestBody List<OrderCreateDTO> dtos) {
-    try {
-      @SuppressWarnings("unchecked")
-      Map<String, Object> result = orderService.createOrdersBulk(dtos);
-      int createdCount = (int) result.get("createdCount");
+    List<OrderResponseDTO> created = new java.util.ArrayList<>();
+    List<Map<String, String>> errors = new java.util.ArrayList<>();
 
-      if (createdCount == 0) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(result);
+    for (int i = 0; i < dtos.size(); i++) {
+      OrderCreateDTO dto = dtos.get(i);
+      try {
+        Order order = orderService.createOrder(dto);
+        created.add(OrderResponseDTO.fromEntity(order));
+      } catch (Exception e) {
+        String ref = dto.getClientReference() != null ? dto.getClientReference() : "index-" + i;
+        errors.add(Map.of("reference", ref, "error", e.getMessage()));
       }
-
-      return ResponseEntity.status(HttpStatus.CREATED).body(result);
-    } catch (RuntimeException e) {
-      return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-          .body(Map.of("error", e.getMessage()));
     }
+
+    Map<String, Object> result = Map.of(
+        "created", created,
+        "createdCount", created.size(),
+        "errorCount", errors.size(),
+        "errors", errors);
+
+    if (created.isEmpty() && !errors.isEmpty()) {
+      return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(result);
+    }
+
+    return ResponseEntity.status(HttpStatus.CREATED).body(result);
   }
 }

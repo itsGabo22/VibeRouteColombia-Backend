@@ -36,8 +36,8 @@ public class GoogleMapsAdapter implements MapService {
   @Cacheable(value = "geocoding", key = "#address + '|' + #city")
   public Coordinate geocode(String address, String city) {
     if (apiKey == null || apiKey.isEmpty()) {
-      log.error("Google Maps API Key not detected. Using fallback (Bogotá).");
-      return new Coordinate(4.6097, -74.0817);
+      log.error("Google Maps API Key not detected. Using City Fallback for {}.", city);
+      return getCityFallback(city);
     }
 
     // 1. Professional cleaning and preparation for Colombia
@@ -71,13 +71,19 @@ public class GoogleMapsAdapter implements MapService {
         return new Coordinate(lat, lng);
       } else {
         String errorStatus = response != null ? response.path("status").asText() : "UNKNOWN";
-        log.warn("❌ Google Geocode failed ({}). Using Bogotá default.", errorStatus);
-        return new Coordinate(4.6097, -74.0817);
+        log.warn("❌ Google Geocode failed ({}). Using city fallback for {}.", errorStatus, city);
+        return getCityFallback(city);
       }
     } catch (Exception e) {
       log.error("💥 Critical error in Google Maps Adapter: {}", e.getMessage());
-      return new Coordinate(4.6097, -74.0817);
+      return getCityFallback(city);
     }
+  }
+
+  private Coordinate getCityFallback(String city) {
+    if (city.equalsIgnoreCase("Medellín")) return new Coordinate(6.2442, -75.5812);
+    if (city.equalsIgnoreCase("Pasto")) return new Coordinate(1.2136, -77.2811);
+    return new Coordinate(4.6097, -74.0817); // Bogotá default
   }
 
   @Override

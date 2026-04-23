@@ -4,6 +4,7 @@ import com.routeoptimizer.dto.OrderCreateDTO;
 import com.routeoptimizer.model.Coordinate;
 import com.routeoptimizer.model.entity.Order;
 import com.routeoptimizer.model.enums.OrderStatus;
+import com.routeoptimizer.model.enums.Priority;
 import com.routeoptimizer.repository.OrderRepository;
 
 import org.springframework.context.annotation.Lazy;
@@ -41,7 +42,7 @@ public class OrderService {
   public Order createOrder(OrderCreateDTO dto) {
     Order order = new Order();
     order.setAddress(dto.getAddress());
-    order.setPriority(dto.getPriority());
+    order.setPriority(dto.getPriority() != null ? dto.getPriority() : Priority.MEDIUM);
     order.setTimeWindowStart(dto.getTimeWindowStart());
     order.setTimeWindowEnd(dto.getTimeWindowEnd());
     order.setClientReference(dto.getClientReference());
@@ -63,10 +64,11 @@ public class OrderService {
     }
 
     order.setLocation(coord);
-    order.setCity(dto.getCity());
+    order.setCity(dto.getCity() != null ? dto.getCity().trim() : "Bogotá");
 
     Order savedOrder = orderRepository.save(order);
-    // batchService.addOrderToActiveBatch(savedOrder); // Deshabilitado para permitir consolidación manual por Logística
+    // batchService.addOrderToActiveBatch(savedOrder); // Deshabilitado para
+    // permitir consolidación manual por Logística
     return savedOrder;
   }
 
@@ -85,7 +87,7 @@ public class OrderService {
   @Transactional(readOnly = true)
   public List<Order> findPendingWithoutBatch(String city) {
     if (city != null && !city.isEmpty()) {
-       return orderRepository.findByBatchIdIsNullAndCity(city);
+      return orderRepository.findByBatchIdIsNullAndCity(city);
     }
     return orderRepository.findByBatchIdIsNull();
   }
