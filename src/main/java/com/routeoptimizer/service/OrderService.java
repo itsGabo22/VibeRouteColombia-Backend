@@ -1,6 +1,7 @@
 package com.routeoptimizer.service;
 
 import com.routeoptimizer.dto.OrderCreateDTO;
+import com.routeoptimizer.dto.OrderResponseDTO;
 import com.routeoptimizer.model.Coordinate;
 import com.routeoptimizer.model.entity.Order;
 import com.routeoptimizer.model.enums.OrderStatus;
@@ -148,4 +149,21 @@ public class OrderService {
         "errorCount", errors.size(),
         "errors", errors);
   }
+
+  @Transactional(readOnly = true)
+  public OrderResponseDTO enrichOrderResponse(Order order) {
+    OrderResponseDTO dto = OrderResponseDTO.fromEntity(order);
+    if (order.getBatchId() != null) {
+      try {
+        com.routeoptimizer.model.entity.Batch batch = batchService.findById(order.getBatchId());
+        if (batch != null && batch.getDriver() != null) {
+          dto.setDriverName(batch.getDriver().getName());
+        }
+      } catch (Exception e) {
+        // Ignoramos si el lote no existe, simplemente no poblamos el driver
+      }
+    }
+    return dto;
+  }
 }
+

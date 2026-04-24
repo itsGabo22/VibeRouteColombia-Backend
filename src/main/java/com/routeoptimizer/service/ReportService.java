@@ -12,10 +12,18 @@ public class ReportService {
     private static final List<Map<String, String>> documentStore = new ArrayList<>();
 
     public Map<String, String> uploadDocument(MultipartFile file, String sender, String type) {
+        String fileName = file.getOriginalFilename();
+        if (fileName != null) {
+            String lowerCaseName = fileName.toLowerCase();
+            if (!(lowerCaseName.endsWith(".pdf") || lowerCaseName.endsWith(".xlsx") || lowerCaseName.endsWith(".csv"))) {
+                throw new RuntimeException("Tipo de archivo no permitido. Solo se admiten PDF, Excel (.xlsx) y CSV.");
+            }
+        }
+
         Map<String, String> doc = new HashMap<>();
         String id = UUID.randomUUID().toString();
         doc.put("id", id);
-        doc.put("filename", file.getOriginalFilename());
+        doc.put("filename", fileName);
         doc.put("sender", sender);
         doc.put("type", type);
         doc.put("timestamp", new java.util.Date().toString());

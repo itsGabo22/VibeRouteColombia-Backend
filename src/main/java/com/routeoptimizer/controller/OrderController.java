@@ -38,15 +38,25 @@ public class OrderController {
   @GetMapping
   public ResponseEntity<List<OrderResponseDTO>> listAll() {
     List<OrderResponseDTO> orders = orderService.findAll().stream()
-        .map(OrderResponseDTO::fromEntity)
+        .map(orderService::enrichOrderResponse)
         .collect(Collectors.toList());
     return ResponseEntity.ok(orders);
   }
 
   @GetMapping("/pending")
   public ResponseEntity<List<OrderResponseDTO>> listPendingWithoutBatch(@RequestParam(required = false) String city) {
-    List<OrderResponseDTO> orders = orderService.findPendingWithoutBatch(city).stream()
-        .map(OrderResponseDTO::fromEntity)
+    String searchCity = city;
+    
+    // Auto-filtro por ciudad si el usuario es Logístico y no especificó ciudad
+    var auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+    if (auth != null && auth.getPrincipal() instanceof com.routeoptimizer.model.entity.User user) {
+        if (user.getRole() == com.routeoptimizer.model.enums.Role.LOGISTICS && (searchCity == null || searchCity.isEmpty())) {
+            searchCity = user.getAssignedCity();
+        }
+    }
+
+    List<OrderResponseDTO> orders = orderService.findPendingWithoutBatch(searchCity).stream()
+        .map(orderService::enrichOrderResponse)
         .collect(Collectors.toList());
     return ResponseEntity.ok(orders);
   }
@@ -54,7 +64,7 @@ public class OrderController {
   @GetMapping("/{id}")
   public ResponseEntity<OrderResponseDTO> getOrder(@PathVariable Long id) {
     Order order = orderService.findById(id);
-    return ResponseEntity.ok(OrderResponseDTO.fromEntity(order));
+    return ResponseEntity.ok(orderService.enrichOrderResponse(order));
   }
 
   @PatchMapping("/{id}/status")
@@ -63,13 +73,13 @@ public class OrderController {
       @RequestParam OrderStatus status,
       @RequestParam(required = false) String reason) {
     Order updated = orderService.updateStatus(id, status, reason);
-    return ResponseEntity.ok(OrderResponseDTO.fromEntity(updated));
+    return ResponseEntity.ok(orderService.enrichOrderResponse(updated));
   }
 
   @GetMapping("/city/{city}")
   public ResponseEntity<List<OrderResponseDTO>> listByCity(@PathVariable String city) {
     List<OrderResponseDTO> orders = orderService.findByCity(city).stream()
-        .map(OrderResponseDTO::fromEntity)
+        .map(orderService::enrichOrderResponse)
         .collect(Collectors.toList());
     return ResponseEntity.ok(orders);
   }
