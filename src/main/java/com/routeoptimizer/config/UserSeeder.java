@@ -28,52 +28,51 @@ public class UserSeeder implements CommandLineRunner {
         this.jdbcTemplate = jdbcTemplate;
     }
 
-    @Value("${ADMIN_EMAIL:superadmin@viberoute.com}")
+    @Value("${ADMIN_EMAIL}")
     private String adminEmail;
 
-    @Value("${ADMIN_PASSWORD:viberoute_master}")
+    @Value("${ADMIN_PASSWORD}")
     private String adminPassword;
 
     @Override
     @Transactional
     public void run(String... args) throws Exception {
-        if (userRepository.count() == 0 || userRepository.findByEmail(adminEmail).isEmpty()) {
-            System.out.println("🚀 [SEEDER] Iniciando sincronización de infraestructura maestra...");
+        System.out.println("\n" + "=".repeat(60));
+        System.out.println("🛡️ [SECURITY] Iniciando sincronización de cuenta maestra...");
+        System.out.println("📧 [SYNC] Email detectado: " + adminEmail);
+        System.out.println("=".repeat(60));
 
-            // PASO 1: Eliminar restricción de base de datos que bloquea SUPER_ADMIN (PostgreSQL fix)
-            try {
-                jdbcTemplate.execute("ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check");
-                System.out.println("🔨 [DATABASE] Restricción de roles eliminada con éxito.");
-            } catch (Exception sqlEx) {
-                System.out.println("⚠️ [DATABASE] No se pudo eliminar la restricción (puede que no exista): " + sqlEx.getMessage());
-            }
-
-            // PASO 2: Sincronizar el Super Admin usando variables de entorno
-            String hashedMasterPass = passwordEncoder.encode(adminPassword);
-
-            userRepository.findByEmail(adminEmail).ifPresentOrElse(
-                user -> {
-                    user.setRole(Role.SUPER_ADMIN);
-                    user.setPasswordHash(hashedMasterPass);
-                    user.setName("Arquitecto Maestro (VibeRoute)");
-                    user.setAssignedCity("Global");
-                    userRepository.save(user);
-                    System.out.println("✅ [SYNC] Usuario '" + adminEmail + "' ACTUALIZADO a SUPER_ADMIN.");
-                },
-                () -> {
-                    User superAdmin = new User();
-                    superAdmin.setName("Arquitecto Maestro (VibeRoute)");
-                    superAdmin.setEmail(adminEmail);
-                    superAdmin.setPasswordHash(hashedMasterPass);
-                    superAdmin.setRole(Role.SUPER_ADMIN);
-                    superAdmin.setAssignedCity("Global");
-                    superAdmin.setPhone("3000000000");
-                    userRepository.save(superAdmin);
-                    System.out.println("⭐ [SEEDER] Super Admin creado con éxito: " + adminEmail);
-                }
-            );
-
-            System.out.println("=".repeat(60) + "\n\n");
+        // PASO 1: Eliminar restricción de base de datos que bloquea SUPER_ADMIN (PostgreSQL fix)
+        try {
+            jdbcTemplate.execute("ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check");
+        } catch (Exception sqlEx) {
+            // Silencioso si ya se eliminó
         }
+
+        // PASO 2: Sincronizar/Crear el Super Admin forzosamente
+        String hashedMasterPass = passwordEncoder.encode(adminPassword);
+
+        userRepository.findByEmail(adminEmail).ifPresentOrElse(
+            user -> {
+                user.setRole(Role.SUPER_ADMIN);
+                user.setPasswordHash(hashedMasterPass);
+                user.setName("Arquitecto Maestro (VibeRoute)");
+                user.setAssignedCity("Global");
+                userRepository.save(user);
+                System.out.println("✅ [SYNC] Cuenta maestra ACTUALIZADA con credenciales del .env.");
+            },
+            () -> {
+                User superAdmin = new User();
+                superAdmin.setName("Arquitecto Maestro (VibeRoute)");
+                superAdmin.setEmail(adminEmail);
+                superAdmin.setPasswordHash(hashedMasterPass);
+                superAdmin.setRole(Role.SUPER_ADMIN);
+                superAdmin.setAssignedCity("Global");
+                superAdmin.setPhone("3000000000");
+                userRepository.save(superAdmin);
+                System.out.println("⭐ [SEEDER] Cuenta maestra CREADA desde cero.");
+            }
+        );
+        System.out.println("=".repeat(60) + "\n");
     }
 }
