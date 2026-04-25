@@ -6,8 +6,9 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import java.util.*;
 
+@CrossOrigin(origins = "*")
 @RestController
-@RequestMapping("/api/v1/reports")
+@RequestMapping({"/api/v1/reports", "/reports"})
 public class ReportController {
 
     private final ReportService reportService;

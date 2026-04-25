@@ -17,8 +17,9 @@ import java.util.stream.Collectors;
 /**
  * Controlador REST para Drivers.
  */
+@CrossOrigin(origins = "*")
 @RestController
-@RequestMapping("/api/v1/drivers") // Changed endpoint from repartidores to drivers
+@RequestMapping({"/api/v1/drivers", "/drivers"})
 public class DriverController {
 
   private final DriverService driverService;

@@ -8,8 +8,9 @@ import com.routeoptimizer.service.RouteService;
 
 import java.util.List;
 
+@CrossOrigin(origins = "*")
 @RestController
-@RequestMapping("/api/v1/routes")
+@RequestMapping({"/api/v1/routes", "/routes"})
 public class RouteController {
 
   private final RouteService routeService;

@@ -44,25 +44,25 @@ public class SecurityConfig {
         .csrf(AbstractHttpConfigurer::disable)
         .authorizeHttpRequests(auth -> auth
             .requestMatchers("/api/v1/auth/login", "/api/v1/auth/reset-password", "/api/v1/ping", "/error", "/ws-alertas/**", "/auth/**").permitAll()
-            .requestMatchers("/api/v1/auth/register").hasAnyRole("SUPER_ADMIN", "ADMIN", "LOGISTICS")
-            .requestMatchers("/api/v1/system/**").hasRole("SUPER_ADMIN")
+            .requestMatchers("/api/v1/auth/register", "/auth/register").hasAnyRole("SUPER_ADMIN", "ADMIN", "LOGISTICS")
+            .requestMatchers("/api/v1/system/**", "/system/**").hasRole("SUPER_ADMIN")
             
             // Specific DRIVER actions
-            .requestMatchers(HttpMethod.PATCH, "/api/v1/drivers/*/status").hasAnyRole("DRIVER", "ADMIN", "SUPER_ADMIN")
-            .requestMatchers(HttpMethod.PATCH, "/api/v1/orders/*/status").hasAnyRole("DRIVER", "LOGISTICS", "ADMIN", "SUPER_ADMIN")
+            .requestMatchers(HttpMethod.PATCH, "/api/v1/drivers/*/status", "/drivers/*/status").hasAnyRole("DRIVER", "ADMIN", "SUPER_ADMIN")
+            .requestMatchers(HttpMethod.PATCH, "/api/v1/orders/*/status", "/orders/*/status").hasAnyRole("DRIVER", "LOGISTICS", "ADMIN", "SUPER_ADMIN")
             
             // Shared Driver management
-            .requestMatchers("/api/v1/drivers", "/api/v1/drivers/**").hasAnyRole("ADMIN", "LOGISTICS", "SUPER_ADMIN")
+            .requestMatchers("/api/v1/drivers", "/api/v1/drivers/**", "/drivers", "/drivers/**").hasAnyRole("ADMIN", "LOGISTICS", "SUPER_ADMIN")
             
             // Shared Logistics/Admin access
-            .requestMatchers("/api/v1/orders", "/api/v1/orders/**", 
-                             "/api/v1/stats", "/api/v1/stats/**",
-                             "/api/v1/reports", "/api/v1/reports/**").hasAnyRole("LOGISTICS", "ADMIN", "SUPER_ADMIN")
+            .requestMatchers("/api/v1/orders", "/api/v1/orders/**", "/orders", "/orders/**",
+                             "/api/v1/stats", "/api/v1/stats/**", "/stats", "/stats/**",
+                             "/api/v1/reports", "/api/v1/reports/**", "/reports", "/reports/**").hasAnyRole("LOGISTICS", "ADMIN", "SUPER_ADMIN")
             
-            // Shared access for operational monitoring (Drivers need batches and routes)
-            .requestMatchers("/api/v1/batches", "/api/v1/batches/**",
-                             "/api/v1/routes", "/api/v1/routes/**", 
-                             "/api/v1/locations", "/api/v1/locations/**").hasAnyRole("DRIVER", "LOGISTICS", "ADMIN", "SUPER_ADMIN")
+            // Shared access for operational monitoring
+            .requestMatchers("/api/v1/batches", "/api/v1/batches/**", "/batches", "/batches/**",
+                             "/api/v1/routes", "/api/v1/routes/**", "/routes", "/routes/**",
+                             "/api/v1/locations", "/api/v1/locations/**", "/locations", "/locations/**").hasAnyRole("DRIVER", "LOGISTICS", "ADMIN", "SUPER_ADMIN")
             
             .requestMatchers("/api/v1/ai/**").authenticated()
             .anyRequest().authenticated())
