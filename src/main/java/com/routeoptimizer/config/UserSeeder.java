@@ -3,6 +3,7 @@ package com.routeoptimizer.config;
 import com.routeoptimizer.model.entity.User;
 import com.routeoptimizer.model.enums.Role;
 import com.routeoptimizer.repository.UserRepository;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -27,13 +28,17 @@ public class UserSeeder implements CommandLineRunner {
         this.jdbcTemplate = jdbcTemplate;
     }
 
+    @Value("${ADMIN_EMAIL:superadmin@viberoute.com}")
+    private String adminEmail;
+
+    @Value("${ADMIN_PASSWORD:viberoute_master}")
+    private String adminPassword;
+
     @Override
     @Transactional
-    public void run(String... args) {
-        try {
-            System.out.println("\n\n" + "=".repeat(60));
-            System.out.println("🧙 [SYSTEM] INICIANDO REPARACIÓN DE ESQUEMA Y ROLES");
-            System.out.println("=".repeat(60));
+    public void run(String... args) throws Exception {
+        if (userRepository.count() == 0 || userRepository.findByEmail(adminEmail).isEmpty()) {
+            System.out.println("🚀 [SEEDER] Iniciando sincronización de infraestructura maestra...");
 
             // PASO 1: Eliminar restricción de base de datos que bloquea SUPER_ADMIN (PostgreSQL fix)
             try {
@@ -43,36 +48,32 @@ public class UserSeeder implements CommandLineRunner {
                 System.out.println("⚠️ [DATABASE] No se pudo eliminar la restricción (puede que no exista): " + sqlEx.getMessage());
             }
 
-            // PASO 2: Sincronizar el Super Admin
-            String masterEmail = "superadmin@viberoute.com";
-            String hashedMasterPass = passwordEncoder.encode("viberoute_master");
+            // PASO 2: Sincronizar el Super Admin usando variables de entorno
+            String hashedMasterPass = passwordEncoder.encode(adminPassword);
 
-            userRepository.findByEmail(masterEmail).ifPresentOrElse(
+            userRepository.findByEmail(adminEmail).ifPresentOrElse(
                 user -> {
                     user.setRole(Role.SUPER_ADMIN);
                     user.setPasswordHash(hashedMasterPass);
                     user.setName("Arquitecto Maestro (VibeRoute)");
                     user.setAssignedCity("Global");
                     userRepository.save(user);
-                    System.out.println("✅ [SYNC] Usuario '" + masterEmail + "' ACTUALIZADO a SUPER_ADMIN.");
+                    System.out.println("✅ [SYNC] Usuario '" + adminEmail + "' ACTUALIZADO a SUPER_ADMIN.");
                 },
                 () -> {
-                    User newUser = new User();
-                    newUser.setEmail(masterEmail);
-                    newUser.setPasswordHash(hashedMasterPass);
-                    newUser.setName("Arquitecto Maestro (VibeRoute)");
-                    newUser.setRole(Role.SUPER_ADMIN);
-                    newUser.setAssignedCity("Global");
-                    userRepository.save(newUser);
-                    System.out.println("✨ [SYNC] Usuario '" + masterEmail + "' CREADO como SUPER_ADMIN.");
+                    User superAdmin = new User();
+                    superAdmin.setName("Arquitecto Maestro (VibeRoute)");
+                    superAdmin.setEmail(adminEmail);
+                    superAdmin.setPasswordHash(hashedMasterPass);
+                    superAdmin.setRole(Role.SUPER_ADMIN);
+                    superAdmin.setAssignedCity("Global");
+                    superAdmin.setPhone("3000000000");
+                    userRepository.save(superAdmin);
+                    System.out.println("⭐ [SEEDER] Super Admin creado con éxito: " + adminEmail);
                 }
             );
 
             System.out.println("=".repeat(60) + "\n\n");
-
-        } catch (Exception e) {
-            System.err.println("❌ ERROR CRÍTICO EN SEEDER: " + e.getMessage());
-            e.printStackTrace();
         }
     }
 }
