@@ -43,7 +43,7 @@ public class SecurityConfig {
         .cors(cors -> cors.configurationSource(corsConfigurationSource()))
         .csrf(AbstractHttpConfigurer::disable)
         .authorizeHttpRequests(auth -> auth
-            .requestMatchers("/api/v1/auth/login", "/api/v1/auth/reset-password", "/api/v1/ping", "/error", "/ws-alertas/**").permitAll()
+            .requestMatchers("/api/v1/auth/login", "/api/v1/auth/reset-password", "/api/v1/ping", "/error", "/ws-alertas/**", "/auth/**").permitAll()
             .requestMatchers("/api/v1/auth/register").hasAnyRole("SUPER_ADMIN", "ADMIN", "LOGISTICS")
             .requestMatchers("/api/v1/system/**").hasRole("SUPER_ADMIN")
             
