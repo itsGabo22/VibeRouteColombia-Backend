@@ -30,8 +30,12 @@ public class BatchController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Batch> getBatch(@PathVariable Long id) {
-        return ResponseEntity.ok(batchService.findById(id));
+    public ResponseEntity<?> getBatch(@PathVariable Long id) {
+        try {
+            return ResponseEntity.ok(batchService.findById(id));
+        } catch (Exception e) {
+            return ResponseEntity.noContent().build();
+        }
     }
 
     @PostMapping("/assign-pending")
@@ -41,8 +45,12 @@ public class BatchController {
     }
 
     @PostMapping("/{id}/optimize")
-    public ResponseEntity<Route> optimizeBatch(@PathVariable Long id) {
-        return ResponseEntity.ok(routeService.optimizeAndSaveRoute(id));
+    public ResponseEntity<Route> optimizeBatch(@PathVariable Long id, @org.springframework.web.bind.annotation.RequestBody(required = false) Map<String, Object> body) {
+        Double lat = body != null ? (Double) body.get("lat") : null;
+        Double lng = body != null ? (Double) body.get("lng") : null;
+        String mode = body != null ? (String) body.get("mode") : "EFFICIENCY";
+        
+        return ResponseEntity.ok(routeService.optimizeAndSaveRoute(id, lat, lng, mode));
     }
 
     @GetMapping("/pending")

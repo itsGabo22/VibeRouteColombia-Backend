@@ -138,7 +138,7 @@ public class AuthService {
         new UsernamePasswordAuthenticationToken(
             request.email(),
             decodedPassword));
-    var user = userRepository.findByEmail(request.email())
+    var user = userRepository.findByEmailIgnoreCase(request.email())
         .orElseThrow();
     var jwtToken = jwtService.generateToken(user);
     

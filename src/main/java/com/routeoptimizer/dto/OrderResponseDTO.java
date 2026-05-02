@@ -19,6 +19,7 @@ public class OrderResponseDTO {
   private LocalTime timeWindowStart;
   private LocalTime timeWindowEnd;
   private String clientReference;
+  private String clientName;
   private String city;
   private String nonDeliveryReason;
   private java.math.BigDecimal price;
@@ -39,6 +40,7 @@ public class OrderResponseDTO {
     dto.setTimeWindowStart(order.getTimeWindowStart());
     dto.setTimeWindowEnd(order.getTimeWindowEnd());
     dto.setClientReference(order.getClientReference());
+    dto.setClientName(order.getClientName());
     dto.setCity(order.getCity());
     dto.setNonDeliveryReason(order.getNonDeliveryReason());
     dto.setPrice(order.getPrice());
@@ -116,6 +118,14 @@ public class OrderResponseDTO {
 
   public void setClientReference(String clientReference) {
     this.clientReference = clientReference;
+  }
+
+  public String getClientName() {
+    return clientName;
+  }
+
+  public void setClientName(String clientName) {
+    this.clientName = clientName;
   }
 
   public String getCity() {

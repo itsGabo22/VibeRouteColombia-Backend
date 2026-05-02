@@ -35,7 +35,7 @@ public class Route {
   @Column(name = "encoded_polyline", length = 5000)
   private String encodedPolyline;
 
-  @OneToMany(fetch = FetchType.LAZY)
+  @OneToMany(fetch = FetchType.EAGER)
   @JoinColumn(name = "route_id")
   @OrderBy("deliveryOrder ASC")
   private List<Order> stops = new ArrayList<>();

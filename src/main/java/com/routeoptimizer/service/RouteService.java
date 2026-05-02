@@ -7,6 +7,7 @@ import com.routeoptimizer.optimization.RouteOptimizer;
 import com.routeoptimizer.repository.RouteRepository;
 import com.routeoptimizer.repository.OrderRepository;
 import com.routeoptimizer.service.MapService;
+import com.routeoptimizer.exception.ResourceNotFoundException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,9 +38,15 @@ public class RouteService {
 
   @Transactional
   public Route optimizeAndSaveRoute(Long batchId) {
+    return optimizeAndSaveRoute(batchId, null, null, "EFFICIENCY");
+  }
+
+  @Transactional
+  public Route optimizeAndSaveRoute(Long batchId, Double startLat, Double startLng, String mode) {
     log.info("Starting optimization and persistence process for batch #{}", batchId);
 
-    Route optimizedResult = routeOptimizer.optimizeBatch(batchId);
+    Coordinate startLoc = (startLat != null && startLng != null) ? new Coordinate(startLat, startLng) : null;
+    Route optimizedResult = routeOptimizer.optimizeBatch(batchId, startLoc, mode);
     
     // Fetch detailed directions (encoded polyline) for the sequence
     String encodedPolyline = null;
@@ -58,6 +65,7 @@ public class RouteService {
         .forBatch(batchId)
         .withStops(stops)
         .withTotalDistance(optimizedResult.getTotalDistanceMeters())
+        .withEstimatedTime(optimizedResult.getTotalDistanceMeters() / 5) // Promedio ~18km/h en ciudad
         .withEncodedPolyline(encodedPolyline)
         .build();
 
@@ -87,18 +95,18 @@ public class RouteService {
   @SuppressWarnings("null")
   public Route findById(Long id) {
     return routeRepository.findById(id)
-        .orElseThrow(() -> new RuntimeException("Route not found with ID: " + id));
+        .orElseThrow(() -> new ResourceNotFoundException("Route not found with ID: " + id));
   }
 
   @Transactional(readOnly = true)
   public Route findByBatchId(Long batchId) {
     return routeRepository.findByBatchId(batchId)
-        .orElseThrow(() -> new RuntimeException("There is no route generated for batch: " + batchId));
+        .orElseThrow(() -> new ResourceNotFoundException("There is no route generated for batch: " + batchId));
   }
 
   @Transactional(readOnly = true)
   public Route findByDriverId(Long driverId) {
     return routeRepository.findByDriverId(driverId)
-        .orElseThrow(() -> new RuntimeException("There is no route assigned for driver: " + driverId));
+        .orElseThrow(() -> new ResourceNotFoundException("There is no route assigned for driver: " + driverId));
   }
 }

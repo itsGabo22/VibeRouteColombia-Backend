@@ -11,14 +11,29 @@ import java.util.HashMap;
 @ControllerAdvice
 public class GlobalExceptionHandler {
 
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ResponseEntity<Map<String, String>> handleResourceNotFoundException(ResourceNotFoundException ex) {
+        Map<String, String> error = new HashMap<>();
+        error.put("error", "Not Found");
+        error.put("message", ex.getMessage());
+        return new ResponseEntity<>(error, HttpStatus.NOT_FOUND);
+    }
+
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<Map<String, String>> handleRuntimeException(RuntimeException ex) {
         Map<String, String> error = new java.util.HashMap<>();
-        error.put("error", ex.getMessage());
-        error.put("message", ex.getMessage()); // Ensure frontend grabs it exactly
+        error.put("error", ex.getClass().getSimpleName());
+        error.put("message", ex.getMessage());
         
-        // Lógica de Caliche: si el mensaje contiene "not found", retornamos 404
-        if (ex.getMessage() != null && (ex.getMessage().toLowerCase().contains("not found") || ex.getMessage().contains("no route"))) {
+        // Log the full stack trace for the developer (Internal log)
+        ex.printStackTrace();
+
+        if (ex.getMessage() != null && (
+            ex.getMessage().toLowerCase().contains("not found") || 
+            ex.getMessage().toLowerCase().contains("no encontrado") || 
+            ex.getMessage().toLowerCase().contains("no route") ||
+            ex.getMessage().toLowerCase().contains("no existe")
+        )) {
             return new ResponseEntity<>(error, HttpStatus.NOT_FOUND);
         }
         

@@ -44,7 +44,7 @@ public class RouteOptimizer {
    */
   @Transactional
   @SuppressWarnings("null")
-  public Route optimizeBatch(Long batchId) {
+  public Route optimizeBatch(Long batchId, Coordinate startLocationOverride, String mode) {
     log.info("Optimizando ruta para el lote #{}", batchId);
 
     Batch batch = batchRepository.findById(batchId)
@@ -53,21 +53,21 @@ public class RouteOptimizer {
     List<Order> orders = batch.getOrders();
     if (orders == null || orders.isEmpty()) {
       log.warn("El lote #{} no tiene pedidos para optimizar.", batchId);
-      // Retornar una ruta vacía o similar si no hay pedidos
       return new Route.Builder().forBatch(batchId).build();
     }
 
-    // Definir punto de partida (Ubicación del repartidor o el almacén)
+    // Punto de partida: Prioridad al GPS en vivo, luego al guardado, luego al almacén
     Coordinate startLocation;
-    if (batch.getDriver() != null && batch.getDriver().getLocation() != null) {
+    if (startLocationOverride != null) {
+      startLocation = startLocationOverride;
+    } else if (batch.getDriver() != null && batch.getDriver().getLocation() != null) {
       startLocation = batch.getDriver().getLocation();
     } else {
-      // Ubicación base por defecto (ej. Un almacén en Bogotá)
       startLocation = new Coordinate(4.6097, -74.0817);
     }
 
     // 1. Ejecutar el motor de optimización (Estrategia)
-    Route optimizedRoute = optimizationStrategy.optimize(orders, startLocation);
+    Route optimizedRoute = optimizationStrategy.optimize(orders, startLocation, mode);
 
     // 2. Persistir el orden (secuencia) en la base de datos
     List<Order> stops = optimizedRoute.getStops();

@@ -30,8 +30,14 @@ public class RouteController {
   }
 
   @GetMapping("/batch/{batchId}")
-  public ResponseEntity<Route> findByBatchId(@PathVariable Long batchId) {
-    return ResponseEntity.ok(routeService.findByBatchId(batchId));
+  public ResponseEntity<?> findByBatchId(@PathVariable Long batchId) {
+    try {
+      Route route = routeService.findByBatchId(batchId);
+      return ResponseEntity.ok(route);
+    } catch (Exception e) {
+      // Si no hay ruta, devolvemos un 204 (No Content) en lugar de un error 400
+      return ResponseEntity.noContent().build();
+    }
   }
 
   @GetMapping("/driver/{driverId}")

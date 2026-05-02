@@ -157,9 +157,14 @@ public class GoogleMapsAdapter implements MapService {
           } else {
             Coordinate p1 = points.get(i);
             Coordinate p2 = points.get(j);
-            // Simple Euclidean distance (approximate meters)
-            double d = Math.sqrt(Math.pow(p1.getLat() - p2.getLat(), 2) + Math.pow(p1.getLng() - p2.getLng(), 2)) * 111320;
-            matrix[i][j] = (long) d;
+            
+            if (p1 == null || p2 == null || p1.getLat() == null || p2.getLat() == null) {
+                matrix[i][j] = 999999;
+            } else {
+                // Simple Euclidean distance (approximate meters)
+                double d = Math.sqrt(Math.pow(p1.getLat() - p2.getLat(), 2) + Math.pow(p1.getLng() - p2.getLng(), 2)) * 111320;
+                matrix[i][j] = (long) d;
+            }
           }
         }
       }

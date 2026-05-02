@@ -47,6 +47,7 @@ public class OrderService {
     order.setTimeWindowStart(dto.getTimeWindowStart());
     order.setTimeWindowEnd(dto.getTimeWindowEnd());
     order.setClientReference(dto.getClientReference());
+    order.setClientName(dto.getClientName());
     order.setPrice(dto.getPrice());
 
     order.setStatus(OrderStatus.PENDING);
@@ -97,15 +98,9 @@ public class OrderService {
   @SuppressWarnings("null")
   public Order updateStatus(Long id, OrderStatus newStatus, String reason) {
     Order order = findById(id);
-    order.setStatus(newStatus);
 
-    if (newStatus == OrderStatus.CANCELLED || newStatus == OrderStatus.RETURNED) {
-      if (reason != null) {
-        order.setNonDeliveryReason(reason);
-      }
-    } else {
-      order.setNonDeliveryReason(null);
-    }
+    // Patrón State: Delegamos la transición al estado actual
+    order.getStateObject().transitionTo(order, newStatus, reason);
 
     Order savedOrder = orderRepository.save(order);
 
