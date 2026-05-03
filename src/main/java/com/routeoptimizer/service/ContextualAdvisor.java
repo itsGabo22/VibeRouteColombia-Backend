@@ -144,31 +144,39 @@ public class ContextualAdvisor {
   /**
    * CASO C — Resumen: Genera resumen de la jornada de entregas.
    *
-   * @param totalEntregados  Total de pedidos entregados
-   * @param totalPendientes  Total de pedidos que quedaron pendientes
-   * @param tiempoTotalHoras Horas totales de la jornada
-   * @param ciudad           Ciudad de operación
+   * @param totalDelivered   Total de pedidos entregados
+   * @param totalPending     Total de pedidos que quedaron pendientes
+   * @param totalCancelled   Total de pedidos cancelados
+   * @param totalReturned    Total de pedidos devueltos
+   * @param efficiencyScore  Puntuación de eficiencia calculada
+   * @param totalHours       Horas totales de la jornada
+   * @param city             Ciudad de operación
    * @return Resumen en lenguaje natural
    */
   public String generateDailySummary(int totalDelivered, int totalPending,
+      int totalCancelled, int totalReturned, int efficiencyScore,
       double totalHours, String city) {
     String prompt = String.format("""
         Eres el asistente logístico de VibeRoute Colombia. Genera un resumen BREVE de la jornada:
 
         - Ciudad: %s
         - Pedidos entregados: %d
+        - Pedidos cancelados: %d
+        - Pedidos devueltos: %d
         - Pedidos pendientes: %d
         - Tiempo total: %.1f horas
+        - Score de Eficiencia: %d%%
 
         Genera un resumen de 2-3 oraciones evaluando el rendimiento y sugiriendo mejoras.
-        Responde en español colombiano. NO uses emojis.
+        Considera que una alta tasa de devoluciones/cancelaciones baja la eficiencia, evalúalo críticamente si aplica.
+        Responde en español colombiano. NO uses emojis. NO menciones que eres una IA.
         """,
-        city, totalDelivered, totalPending, totalHours);
+        city, totalDelivered, totalCancelled, totalReturned, totalPending, totalHours, efficiencyScore);
 
     String fallback = String.format(
-        "Jornada en %s: %d pedidos entregados, %d pendientes en %.1f horas. %s",
-        city, totalDelivered, totalPending, totalHours,
-        totalPending == 0 ? "Excelente rendimiento." : "Se recomienda optimizar las rutas para reducir pendientes.");
+        "Jornada en %s: %d entregados, %d cancelados/devueltos, %d pendientes en %.1f horas. %s",
+        city, totalDelivered, (totalCancelled + totalReturned), totalPending, totalHours,
+        efficiencyScore >= 80 ? "Excelente rendimiento." : "Se recomienda evaluar las causas de no entrega para mejorar la eficiencia.");
 
     return geminiClient.generateText(prompt, fallback);
   }
@@ -196,9 +204,108 @@ public class ContextualAdvisor {
   }
 
   /**
-   * Genera texto directamente desde un prompt dinámico.
+   * Generates text directly from a dynamic prompt.
    */
   public String askGeminiDirect(String prompt) {
       return geminiClient.generateText(prompt, "Reporte Automático: Zonas geográficas optimizadas para los pedidos actuales.");
+  }
+
+  /**
+   * CASE D — Copilot: Generates progressive delivery tips for the driver.
+   * 
+   * Single Gemini call produces a JSON array with 5-7 contextual tips,
+   * each tagged with a trigger condition (Strategy Pattern labels).
+   * Tips are cached in Batch.aiCopilotTips to avoid repeated API calls.
+   *
+   * @param batch      The batch with orders to analyze
+   * @param driverName The name of the assigned driver
+   * @return JSON array string of tips, or a default fallback
+   */
+  public String generateBatchCopilotTips(Batch batch, String driverName) {
+    List<Order> orders = batch.getOrders();
+    String hour = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"));
+
+    String city = orders.stream()
+        .filter(o -> o.getCity() != null)
+        .map(Order::getCity)
+        .findFirst()
+        .orElse("Colombia");
+
+    long highPriorityCount = orders.stream()
+        .filter(o -> o.getPriority() != null && "HIGH".equalsIgnoreCase(o.getPriority().name()))
+        .count();
+
+    String highAddresses = orders.stream()
+        .filter(o -> o.getPriority() != null && "HIGH".equalsIgnoreCase(o.getPriority().name()))
+        .limit(3)
+        .map(Order::getAddress)
+        .collect(Collectors.joining(", "));
+
+    long missingNameCount = orders.stream()
+        .filter(o -> o.getClientName() == null || o.getClientName().isBlank())
+        .count();
+
+    long missingPriceCount = orders.stream()
+        .filter(o -> o.getPrice() == null || o.getPrice().doubleValue() <= 0)
+        .count();
+
+    String prompt = String.format("""
+        You are VibeRoute Colombia's intelligent delivery copilot. Generate a JSON array 
+        with exactly 6 short spoken suggestions for driver %s delivering %d orders in %s.
+
+        BATCH CONTEXT:
+        - HIGH priority orders: %d → %s
+        - Orders missing client name: %d
+        - Orders missing price: %d
+        - Departure time: %s
+
+        RESPONSE FORMAT (JSON array only, no explanation):
+        [{"message":"short phrase in Colombian Spanish","trigger":"ON_START","priority":"HIGH"}]
+
+        VALID TRIGGERS (use each at least once):
+        - ON_START: when starting the route
+        - AFTER_DELIVERY_3: after the 3rd delivery
+        - HALFWAY: at the halfway point
+        - NEAR_END: when 2 orders remain
+        - ALL_DONE: when all deliveries are complete
+        - GENERAL: can be shown at any point
+
+        TONE RULES:
+        - Speak like a friendly colleague: "Hey %s, remember that..."
+        - NO emojis. Max 20 words per message.
+        - Colombian Spanish. Professional but warm.
+        - If there are HIGH priority orders, ON_START must mention them.
+        - If there are orders without client name, include a caution tip.
+        """,
+        driverName, orders.size(), city,
+        highPriorityCount, highAddresses.isEmpty() ? "none" : highAddresses,
+        missingNameCount, missingPriceCount, hour, driverName);
+
+    String fallback = generateCopilotFallback(driverName, orders.size(), highPriorityCount);
+
+    log.info("Generating copilot tips for batch #{} (driver: {}, {} orders)", 
+        batch.getId(), driverName, orders.size());
+
+    return geminiClient.generateText(prompt, fallback);
+  }
+
+  /**
+   * Fallback copilot tips when Gemini is unavailable.
+   * Returns a valid JSON array with generic but useful tips.
+   */
+  private String generateCopilotFallback(String driverName, int totalOrders, long highCount) {
+    String highTip = highCount > 0
+        ? String.format("Tienes %d pedido(s) de alta prioridad, arranca con esos", highCount)
+        : "Revisa tu lista y arranca con la primera entrega";
+
+    return String.format("""
+        [
+          {"message":"%s, %s","trigger":"ON_START","priority":"HIGH"},
+          {"message":"Vas bien, ya llevas 3 entregas. Sigue con ese ritmo","trigger":"AFTER_DELIVERY_3","priority":"LOW"},
+          {"message":"Mitad de ruta completada, buen avance %s","trigger":"HALFWAY","priority":"LOW"},
+          {"message":"Quedan solo 2 entregas, ya casi terminas","trigger":"NEAR_END","priority":"MEDIUM"},
+          {"message":"Excelente trabajo %s, jornada completada","trigger":"ALL_DONE","priority":"LOW"},
+          {"message":"Verifica la dirección antes de cada entrega para evitar devoluciones","trigger":"GENERAL","priority":"MEDIUM"}
+        ]""", driverName, highTip, driverName, driverName);
   }
 }

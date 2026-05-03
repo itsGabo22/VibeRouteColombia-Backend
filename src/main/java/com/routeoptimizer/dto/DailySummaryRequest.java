@@ -3,7 +3,10 @@ package com.routeoptimizer.dto;
 public class DailySummaryRequest {
     private int totalDelivered;
     private int totalPending;
+    private int totalCancelled;
+    private int totalReturned;
     private double totalHours;
+    private int efficiencyScore;
     private String city;
 
     // Getters and Setters
@@ -37,5 +40,29 @@ public class DailySummaryRequest {
 
     public void setCity(String city) {
         this.city = city;
+    }
+
+    public int getTotalCancelled() {
+        return totalCancelled;
+    }
+
+    public void setTotalCancelled(int totalCancelled) {
+        this.totalCancelled = totalCancelled;
+    }
+
+    public int getTotalReturned() {
+        return totalReturned;
+    }
+
+    public void setTotalReturned(int totalReturned) {
+        this.totalReturned = totalReturned;
+    }
+
+    public int getEfficiencyScore() {
+        return efficiencyScore;
+    }
+
+    public void setEfficiencyScore(int efficiencyScore) {
+        this.efficiencyScore = efficiencyScore;
     }
 }

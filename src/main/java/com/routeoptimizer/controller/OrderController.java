@@ -69,12 +69,18 @@ public class OrderController {
   }
 
   @PatchMapping("/{id}/status")
-  public ResponseEntity<OrderResponseDTO> updateStatus(
+  public ResponseEntity<?> updateStatus(
       @PathVariable Long id,
       @RequestParam OrderStatus status,
       @RequestParam(required = false) String reason) {
-    Order updated = orderService.updateStatus(id, status, reason);
-    return ResponseEntity.ok(orderService.enrichOrderResponse(updated));
+    try {
+      Order updated = orderService.updateStatus(id, status, reason);
+      return ResponseEntity.ok(orderService.enrichOrderResponse(updated));
+    } catch (IllegalStateException e) {
+      return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+    } catch (RuntimeException e) {
+      return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+    }
   }
 
   @GetMapping("/city/{city}")

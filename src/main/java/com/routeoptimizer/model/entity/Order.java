@@ -85,6 +85,7 @@ public class Order {
   private java.math.BigDecimal price;
 
   @Transient
+  @com.fasterxml.jackson.annotation.JsonIgnore
   private OrderState stateObject;
 
   public Order() {
@@ -102,6 +103,7 @@ public class Order {
     this.status = newState.getStatus();
   }
 
+  @com.fasterxml.jackson.annotation.JsonIgnore
   public OrderState getStateObject() {
     if (this.stateObject == null) {
       this.stateObject = StateFactory.getState(this.status);

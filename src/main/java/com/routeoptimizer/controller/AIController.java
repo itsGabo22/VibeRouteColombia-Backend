@@ -60,6 +60,9 @@ public class AIController {
     String summary = contextualAdvisor.generateDailySummary(
         request.getTotalDelivered(),
         request.getTotalPending(),
+        request.getTotalCancelled(),
+        request.getTotalReturned(),
+        request.getEfficiencyScore(),
         request.getTotalHours(),
         request.getCity());
 

@@ -30,17 +30,20 @@ public class BatchService {
     private final DriverRepository driverRepository;
     private final RouteService routeService;
     private final AIRouteSuggestionService aiService;
+    private final ContextualAdvisor contextualAdvisor;
 
     public BatchService(BatchRepository batchRepository,
             OrderRepository orderRepository,
             DriverRepository driverRepository,
             RouteService routeService,
-            AIRouteSuggestionService aiService) {
+            AIRouteSuggestionService aiService,
+            ContextualAdvisor contextualAdvisor) {
         this.batchRepository = batchRepository;
         this.orderRepository = orderRepository;
         this.driverRepository = driverRepository;
         this.routeService = routeService;
         this.aiService = aiService;
+        this.contextualAdvisor = contextualAdvisor;
     }
 
     @Transactional
@@ -99,6 +102,7 @@ public class BatchService {
         batchRepository.save(batch);
 
         executeAIAnalysis(batch);
+        generateCopilotTips(batch, driver);
 
         try {
             routeService.optimizeAndSaveRoute(batch.getId());
@@ -139,6 +143,7 @@ public class BatchService {
         log.info("Batch #{} assigned to driver #{} ({})", batch.getId(), driver.getId(), driver.getName());
 
         executeAIAnalysis(batch);
+        generateCopilotTips(batch, driver);
 
         try {
             routeService.optimizeAndSaveRoute(batch.getId());
@@ -200,6 +205,7 @@ public class BatchService {
         batch = batchRepository.save(batch);
 
         executeAIAnalysis(batch);
+        generateCopilotTips(batch, driver);
 
         try {
             routeService.optimizeAndSaveRoute(batch.getId());
@@ -219,6 +225,21 @@ public class BatchService {
                     sugerencias.get("urgentOrdersCount"));
         } catch (Exception e) {
             log.warn("Could not get AI suggestions for batch #{}: {}", batch.getId(), e.getMessage());
+        }
+    }
+
+    /**
+     * Generates AI copilot tips for the driver via a single Gemini call.
+     * Tips are persisted in the Batch entity (Observer Pattern: assignment triggers generation).
+     */
+    private void generateCopilotTips(Batch batch, Driver driver) {
+        try {
+            String copilotTips = contextualAdvisor.generateBatchCopilotTips(batch, driver.getName());
+            batch.setAiCopilotTips(copilotTips);
+            batchRepository.save(batch);
+            log.info("🧠 Copilot tips generated for batch #{} (driver: {})", batch.getId(), driver.getName());
+        } catch (Exception e) {
+            log.warn("Could not generate copilot tips for batch #{}: {}", batch.getId(), e.getMessage());
         }
     }
 
