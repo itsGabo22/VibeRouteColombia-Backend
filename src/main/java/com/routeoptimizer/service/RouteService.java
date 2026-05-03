@@ -72,10 +72,12 @@ public class RouteService {
     @SuppressWarnings("null")
     Route savedRoute = routeRepository.save(routeToSave);
     
-    // Link orders to the saved route
+    // Link orders to the saved route and preserve delivery sequence
     if (stops != null) {
-        for (Order o : stops) {
+        for (int i = 0; i < stops.size(); i++) {
+            Order o = stops.get(i);
             o.setRouteId(savedRoute.getId());
+            o.setDeliveryOrder(i + 1); // Persistir el orden secuencial
             orderRepository.save(o);
         }
     }

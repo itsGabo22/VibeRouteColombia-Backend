@@ -194,4 +194,11 @@ public class ContextualAdvisor {
 
     return sb.toString().trim();
   }
+
+  /**
+   * Genera texto directamente desde un prompt dinámico.
+   */
+  public String askGeminiDirect(String prompt) {
+      return geminiClient.generateText(prompt, "Reporte Automático: Zonas geográficas optimizadas para los pedidos actuales.");
+  }
 }

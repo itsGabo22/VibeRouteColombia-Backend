@@ -37,42 +37,47 @@ public class UserSeeder implements CommandLineRunner {
     @Override
     @Transactional
     public void run(String... args) throws Exception {
-        System.out.println("\n" + "=".repeat(60));
-        System.out.println("🛡️ [SECURITY] Iniciando sincronización de cuenta maestra...");
-        System.out.println("📧 [SYNC] Email detectado: " + adminEmail);
-        System.out.println("=".repeat(60));
-
-        // PASO 1: Eliminar restricción de base de datos que bloquea SUPER_ADMIN (PostgreSQL fix)
         try {
-            jdbcTemplate.execute("ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check");
-        } catch (Exception sqlEx) {
-            // Silencioso si ya se eliminó
-        }
+            System.out.println("\n" + "=".repeat(60));
+            System.out.println("🛡️ [SECURITY] Iniciando sincronización de cuenta maestra...");
+            System.out.println("📧 [SYNC] Email detectado: " + adminEmail);
+            System.out.println("=".repeat(60));
 
-        // PASO 2: Sincronizar/Crear el Super Admin forzosamente
-        String hashedMasterPass = passwordEncoder.encode(adminPassword);
-
-        userRepository.findByEmail(adminEmail).ifPresentOrElse(
-            user -> {
-                user.setRole(Role.SUPER_ADMIN);
-                user.setPasswordHash(hashedMasterPass);
-                user.setName("Arquitecto Maestro (VibeRoute)");
-                user.setAssignedCity("Global");
-                userRepository.save(user);
-                System.out.println("✅ [SYNC] Cuenta maestra ACTUALIZADA con credenciales del .env.");
-            },
-            () -> {
-                User superAdmin = new User();
-                superAdmin.setName("Arquitecto Maestro (VibeRoute)");
-                superAdmin.setEmail(adminEmail);
-                superAdmin.setPasswordHash(hashedMasterPass);
-                superAdmin.setRole(Role.SUPER_ADMIN);
-                superAdmin.setAssignedCity("Global");
-                superAdmin.setPhone("3000000000");
-                userRepository.save(superAdmin);
-                System.out.println("⭐ [SEEDER] Cuenta maestra CREADA desde cero.");
+            // PASO 1: Eliminar restricción de base de datos que bloquea SUPER_ADMIN (PostgreSQL fix)
+            try {
+                jdbcTemplate.execute("ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check");
+            } catch (Exception sqlEx) {
+                // Silencioso si ya se eliminó
             }
-        );
-        System.out.println("=".repeat(60) + "\n");
+
+            // PASO 2: Sincronizar/Crear el Super Admin forzosamente
+            String hashedMasterPass = passwordEncoder.encode(adminPassword);
+
+            userRepository.findByEmail(adminEmail).ifPresentOrElse(
+                user -> {
+                    user.setRole(Role.SUPER_ADMIN);
+                    user.setPasswordHash(hashedMasterPass);
+                    user.setName("Arquitecto Maestro (VibeRoute)");
+                    user.setAssignedCity("Global");
+                    userRepository.save(user);
+                    System.out.println("✅ [SYNC] Cuenta maestra ACTUALIZADA con credenciales del .env.");
+                },
+                () -> {
+                    User superAdmin = new User();
+                    superAdmin.setName("Arquitecto Maestro (VibeRoute)");
+                    superAdmin.setEmail(adminEmail);
+                    superAdmin.setPasswordHash(hashedMasterPass);
+                    superAdmin.setRole(Role.SUPER_ADMIN);
+                    superAdmin.setAssignedCity("Global");
+                    superAdmin.setPhone("3000000000");
+                    userRepository.save(superAdmin);
+                    System.out.println("⭐ [SEEDER] Cuenta maestra CREADA desde cero.");
+                }
+            );
+            System.out.println("=".repeat(60) + "\n");
+        } catch (Exception e) {
+            System.err.println("⚠️ [CRITICAL] Fallo en el Seeder de usuarios: " + e.getMessage());
+            System.err.println("La aplicación continuará intentando arrancar...");
+        }
     }
 }

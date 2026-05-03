@@ -17,6 +17,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import com.routeoptimizer.model.enums.OrderStatus;
+
 @Service
 public class BatchService {
 
@@ -83,6 +85,17 @@ public class BatchService {
         Driver driver = available.get(0);
         batch.setDriver(driver);
         batch.setStatus("ASSIGNED");
+
+        // Actualizar el estado del conductor a EN RUTA
+        driver.setStatus(DriverStatus.ON_ROUTE);
+        driverRepository.save(driver);
+
+        // Sincronizar pedidos
+        batch.getOrders().forEach(o -> {
+            o.setStatus(OrderStatus.ON_ROUTE);
+            orderRepository.save(o);
+        });
+
         batchRepository.save(batch);
 
         executeAIAnalysis(batch);
@@ -110,6 +123,17 @@ public class BatchService {
         Batch batch = pendingBatches.get(0);
         batch.setDriver(driver);
         batch.setStatus("ASSIGNED");
+
+        // Actualizar el estado del conductor a EN RUTA
+        driver.setStatus(DriverStatus.ON_ROUTE);
+        driverRepository.save(driver);
+
+        // Sincronizar pedidos
+        batch.getOrders().forEach(o -> {
+            o.setStatus(OrderStatus.ON_ROUTE);
+            orderRepository.save(o);
+        });
+
         batchRepository.save(batch);
 
         log.info("Batch #{} assigned to driver #{} ({})", batch.getId(), driver.getId(), driver.getName());
@@ -162,6 +186,17 @@ public class BatchService {
         
         batch.setDriver(driver);
         batch.setStatus("ASSIGNED");
+
+        // Cambiar el estado del conductor a En Ruta
+        driver.setStatus(DriverStatus.ON_ROUTE);
+        driverRepository.save(driver);
+
+        // Sincronizar pedidos
+        batch.getOrders().forEach(o -> {
+            o.setStatus(OrderStatus.ON_ROUTE);
+            orderRepository.save(o);
+        });
+
         batch = batchRepository.save(batch);
 
         executeAIAnalysis(batch);
@@ -177,14 +212,11 @@ public class BatchService {
 
     private void executeAIAnalysis(Batch batch) {
         try {
-            // Note: need to make sure aiService accepts Batch if we renamed Lote to Batch
-            // We use standard Object passing for now if methods are broken, or we will fix
-            // AI service
             Map<String, Object> sugerencias = aiService.sugerirOptimizacion(batch);
-            log.info("🤖 IA para Batch #{}: {}", batch.getId(), sugerencias.get("recomendacion"));
+            log.info("🤖 IA para Batch #{}: {}", batch.getId(), sugerencias.get("aiRecommendation"));
             log.info("   Tráfico: {}, Pedidos prioritarios: {}",
                     sugerencias.get("trafficInsights"),
-                    sugerencias.get("pedidosPrioritariosSugeridos"));
+                    sugerencias.get("urgentOrdersCount"));
         } catch (Exception e) {
             log.warn("Could not get AI suggestions for batch #{}: {}", batch.getId(), e.getMessage());
         }
@@ -226,6 +258,14 @@ public class BatchService {
     public Optional<Batch> findActiveBatchByDriverName(String driverName) {
         return batchRepository.findAll().stream()
                 .filter(b -> b.getDriver() != null && b.getDriver().getName().equalsIgnoreCase(driverName))
+                .filter(b -> !"COMPLETED".equals(b.getStatus()))
+                .findFirst();
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<Batch> findActiveBatchByDriverId(Long driverId) {
+        return batchRepository.findAll().stream()
+                .filter(b -> b.getDriver() != null && b.getDriver().getId().equals(driverId))
                 .filter(b -> !"COMPLETED".equals(b.getStatus()))
                 .findFirst();
     }

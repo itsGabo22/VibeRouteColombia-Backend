@@ -77,7 +77,7 @@ public class OrToolsStrategy implements OptimizationStrategy {
 
     RoutingSearchParameters searchParameters = com.google.ortools.constraintsolver.main.defaultRoutingSearchParameters()
         .toBuilder()
-        .setFirstSolutionStrategy(FirstSolutionStrategy.Value.SAVINGS) // Clarke-Wright Savings: Produce rutas mucho más limpias y lógicas visualmente.
+        .setFirstSolutionStrategy(FirstSolutionStrategy.Value.PATH_CHEAPEST_ARC) 
         .setTimeLimit(com.google.protobuf.Duration.newBuilder().setSeconds(2).build())
         .build();
 

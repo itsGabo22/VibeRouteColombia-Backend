@@ -16,4 +16,7 @@ public interface DriverRepository extends JpaRepository<Driver, Long> {
 
   // Método clave para buscar repartidores que puedan aceptar lotes
   List<Driver> findByStatus(DriverStatus status);
+  
+  // Buscar por ciudad asignada (case-insensitive)
+  List<Driver> findByAssignedCityIgnoreCase(String city);
 }

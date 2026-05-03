@@ -28,6 +28,7 @@ public class Batch {
 
     @OneToMany
     @JoinColumn(name = "batch_id", insertable = false, updatable = false)
+    @OrderBy("deliveryOrder ASC")
     private List<Order> orders = new ArrayList<>();
 
     @ManyToOne

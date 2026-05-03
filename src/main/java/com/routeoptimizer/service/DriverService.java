@@ -11,7 +11,11 @@ import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.routeoptimizer.model.entity.Batch;
+import com.routeoptimizer.model.entity.Order;
+import com.routeoptimizer.dto.DriverResponseDTO;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Servicio con la lógica de negocio para Drivers.
@@ -92,5 +96,39 @@ public class DriverService {
     batchService.assignAvailableDriverToOldestPendingBatch(driver);
 
     return driverRepository.save(driver);
+  }
+
+  @Transactional(readOnly = true)
+  public List<DriverResponseDTO> getFleetStatus() {
+    List<Driver> drivers = driverRepository.findAll();
+    System.out.println("[FLEET-STATUS] Total drivers encontrados en BD: " + drivers.size());
+    drivers.forEach(d -> System.out.println("  -> Driver ID=" + d.getId() + " name=" + d.getName() + " status=" + d.getStatus() + " city=" + d.getAssignedCity()));
+
+    List<DriverResponseDTO> result = new java.util.ArrayList<>();
+    for (Driver d : drivers) {
+      try {
+        DriverResponseDTO dto = DriverResponseDTO.fromEntity(d);
+        
+        // Buscar carga activa por ID del conductor (más fiable que por nombre)
+        batchService.findActiveBatchByDriverId(d.getId()).ifPresent(batch -> {
+          dto.setCurrentBatchId(batch.getId());
+          dto.setCurrentOrdersCount(batch.getOrders() != null ? batch.getOrders().size() : 0);
+          dto.setActiveAddresses(batch.getOrders() != null 
+              ? batch.getOrders().stream()
+                  .map(Order::getAddress)
+                  .limit(3)
+                  .collect(Collectors.toList())
+              : java.util.Collections.emptyList());
+        });
+        
+        result.add(dto);
+      } catch (Exception e) {
+        System.err.println("[FLEET-STATUS] Error procesando driver ID=" + d.getId() + ": " + e.getMessage());
+        // Aún así lo agregamos con datos básicos para que nunca desaparezca
+        DriverResponseDTO fallback = DriverResponseDTO.fromEntity(d);
+        result.add(fallback);
+      }
+    }
+    return result;
   }
 }

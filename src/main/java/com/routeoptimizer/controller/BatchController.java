@@ -5,6 +5,7 @@ import java.util.Map;
 
 import com.routeoptimizer.model.entity.Batch;
 import com.routeoptimizer.model.entity.Route;
+import com.routeoptimizer.repository.OrderRepository;
 import com.routeoptimizer.service.BatchService;
 import com.routeoptimizer.service.RouteService;
 
@@ -18,10 +19,14 @@ public class BatchController {
 
     private final BatchService batchService;
     private final RouteService routeService;
+    private final com.routeoptimizer.service.SmartDispatchService smartDispatchService;
+    private final OrderRepository orderRepository;
 
-    public BatchController(BatchService batchService, RouteService routeService) {
+    public BatchController(BatchService batchService, RouteService routeService, com.routeoptimizer.service.SmartDispatchService smartDispatchService, OrderRepository orderRepository) {
         this.batchService = batchService;
         this.routeService = routeService;
+        this.smartDispatchService = smartDispatchService;
+        this.orderRepository = orderRepository;
     }
 
     @GetMapping
@@ -76,5 +81,51 @@ public class BatchController {
     @PostMapping("/{batchId}/assign-driver/{driverId}")
     public ResponseEntity<Batch> assignDriverToBatch(@PathVariable Long batchId, @PathVariable Long driverId) {
         return ResponseEntity.ok(batchService.assignDriverToBatch(batchId, driverId));
+    }
+
+    @GetMapping("/smart-dispatch/suggest")
+    public ResponseEntity<com.routeoptimizer.dto.SmartDispatchPlanDTO> suggestSmartDispatch(@RequestParam(required = false) String city) {
+        return ResponseEntity.ok(smartDispatchService.suggestDispatchPlan(city));
+    }
+
+    @PostMapping("/smart-dispatch/apply")
+    public ResponseEntity<Map<String, String>> applySmartDispatch(@RequestBody Map<String, Object> body) {
+        try {
+            // Recibimos una versión simplificada: un mapa de zonas con sus IDs de pedidos y conductor
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> clusters = (List<Map<String, Object>>) body.get("clusters");
+            
+            int batchesCreated = 0;
+            for (Map<String, Object> cluster : clusters) {
+                @SuppressWarnings("unchecked")
+                List<Integer> orderIdsRaw = (List<Integer>) cluster.get("orderIds");
+                List<Long> orderIds = orderIdsRaw.stream().map(Integer::longValue).collect(java.util.stream.Collectors.toList());
+                
+                Number driverIdNum = (Number) cluster.get("driverId");
+                Long driverId = driverIdNum != null ? driverIdNum.longValue() : null;
+                
+                if (orderIds.isEmpty()) continue;
+                
+                // Resolver la ciudad real desde el primer pedido
+                String city = "Pasto";
+                try {
+                    var firstOrder = orderRepository.findById(orderIds.get(0));
+                    if (firstOrder.isPresent() && firstOrder.get().getCity() != null) {
+                        city = firstOrder.get().getCity();
+                    }
+                } catch (Exception ignore) {}
+                
+                com.routeoptimizer.model.entity.Batch newBatch = batchService.createManualBatch(orderIds, city);
+                if (driverId != null) {
+                    batchService.assignDriverToBatch(newBatch.getId(), driverId);
+                }
+                batchesCreated++;
+            }
+            
+            return ResponseEntity.ok(Map.of("status", "success", "message", batchesCreated + " lotes creados exitosamente."));
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.badRequest().body(Map.of("status", "error", "message", "Error al aplicar el plan: " + e.getMessage()));
+        }
     }
 }
