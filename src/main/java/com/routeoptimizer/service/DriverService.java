@@ -6,6 +6,7 @@ import com.routeoptimizer.model.entity.Driver;
 import com.routeoptimizer.model.enums.DriverStatus;
 import com.routeoptimizer.model.enums.Role;
 import com.routeoptimizer.repository.DriverRepository;
+import com.routeoptimizer.repository.OrderRepository;
 
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
@@ -25,10 +26,12 @@ public class DriverService {
 
   private final DriverRepository driverRepository;
   private final BatchService batchService;
+  private final OrderRepository orderRepository;
 
-  public DriverService(DriverRepository driverRepository, @Lazy BatchService batchService) {
+  public DriverService(DriverRepository driverRepository, @Lazy BatchService batchService, OrderRepository orderRepository) {
     this.driverRepository = driverRepository;
     this.batchService = batchService;
+    this.orderRepository = orderRepository;
   }
 
   @Transactional
@@ -101,15 +104,20 @@ public class DriverService {
   @Transactional(readOnly = true)
   public List<DriverResponseDTO> getFleetStatus() {
     List<Driver> drivers = driverRepository.findAll();
-    System.out.println("[FLEET-STATUS] Total drivers encontrados en BD: " + drivers.size());
-    drivers.forEach(d -> System.out.println("  -> Driver ID=" + d.getId() + " name=" + d.getName() + " status=" + d.getStatus() + " city=" + d.getAssignedCity()));
+    java.time.LocalDateTime startOfDay = java.time.LocalDate.now().atStartOfDay();
 
     List<DriverResponseDTO> result = new java.util.ArrayList<>();
     for (Driver d : drivers) {
       try {
         DriverResponseDTO dto = DriverResponseDTO.fromEntity(d);
         
-        // Buscar carga activa por ID del conductor (más fiable que por nombre)
+        // SINCRONIZACIÓN REAL: Obtener conteos directamente de la DB para evitar datos desactualizados
+        long successful = orderRepository.countSuccessfulDeliveriesForDriver(d.getName());
+        long failed = orderRepository.countFailedDeliveriesForDriver(d.getName());
+        dto.setCompletedOrders((int)successful);
+        dto.setFailedOrders((int)failed);
+
+        // Buscar carga activa por ID del conductor
         batchService.findActiveBatchByDriverId(d.getId()).ifPresent(batch -> {
           dto.setCurrentBatchId(batch.getId());
           dto.setCurrentOrdersCount(batch.getOrders() != null ? batch.getOrders().size() : 0);
@@ -124,7 +132,6 @@ public class DriverService {
         result.add(dto);
       } catch (Exception e) {
         System.err.println("[FLEET-STATUS] Error procesando driver ID=" + d.getId() + ": " + e.getMessage());
-        // Aún así lo agregamos con datos básicos para que nunca desaparezca
         DriverResponseDTO fallback = DriverResponseDTO.fromEntity(d);
         result.add(fallback);
       }

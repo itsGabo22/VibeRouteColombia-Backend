@@ -59,11 +59,10 @@ public class AnalyticsService {
                     if (cityFilter != null && !cityFilter.isEmpty() && !cityFilter.equalsIgnoreCase(d.getAssignedCity())) {
                         continue;
                     }
-                    if (d.getCostPerHour() != null) {
-                        double hours = route.getEstimatedTimeSeconds() / 3600.0;
-                        java.math.BigDecimal routeCost = d.getCostPerHour().multiply(java.math.BigDecimal.valueOf(hours));
-                        totalCosts = totalCosts.add(routeCost);
-                    }
+                    java.math.BigDecimal costPerHour = d.getCostPerHour() != null ? d.getCostPerHour() : java.math.BigDecimal.valueOf(15000);
+                    double hours = route.getEstimatedTimeSeconds() / 3600.0;
+                    java.math.BigDecimal routeCost = costPerHour.multiply(java.math.BigDecimal.valueOf(hours));
+                    totalCosts = totalCosts.add(routeCost);
                 }
             }
         }
@@ -134,7 +133,7 @@ public class AnalyticsService {
             ranked.add(new DriverRankingDTO(
                     dto.driverName(),
                     dto.successfulDeliveries(),
-                    dto.effectivenessPercentage(),
+                    Math.round(dto.effectivenessPercentage() * 10.0) / 10.0, // Formatear a 1 decimal para evitar 99.999999
                     tag));
         }
         return ranked;

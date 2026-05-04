@@ -67,7 +67,24 @@ public class RouteOptimizer {
     }
 
     // 1. Ejecutar el motor de optimización (Estrategia)
-    Route optimizedRoute = optimizationStrategy.optimize(orders, startLocation, mode);
+    Route optimizedRoute;
+    if ("PRIORITY".equalsIgnoreCase(mode)) {
+        // En modo prioridad estricto, ordenamos primero por prioridad y luego por distancia si es posible.
+        // Como simplificación robusta: HIGH primero, luego MEDIUM, luego LOW.
+        List<Order> sortedOrders = new java.util.ArrayList<>(orders);
+        sortedOrders.sort((o1, o2) -> {
+            int p1 = o1.getPriority() != null ? o1.getPriority().ordinal() : 1; // Default MEDIUM
+            int p2 = o2.getPriority() != null ? o2.getPriority().ordinal() : 1;
+            return Integer.compare(p1, p2); // HIGH(0), MEDIUM(1), LOW(2)
+        });
+        optimizedRoute = new Route.Builder()
+            .forBatch(batchId)
+            .withStops(sortedOrders)
+            .build();
+    } else {
+        // MODO EFICIENCIA: Usar OR-Tools para TSP
+        optimizedRoute = optimizationStrategy.optimize(orders, startLocation, mode);
+    }
 
     // 2. Persistir el orden (secuencia) en la base de datos
     List<Order> stops = optimizedRoute.getStops();

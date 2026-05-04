@@ -62,14 +62,8 @@ public class OrToolsStrategy implements OptimizationStrategy {
       
       long distance = distanceMatrix[fromNode][toNode];
       
-      if (toNode > 0 && isPriorityMode) {
-        Order order = orders.get(toNode - 1);
-        if (com.routeoptimizer.model.enums.Priority.HIGH.equals(order.getPriority())) {
-            return (long)(distance * 0.4); // Fuerte atracción para HIGH
-        } else if (com.routeoptimizer.model.enums.Priority.LOW.equals(order.getPriority())) {
-            return (long)(distance * 1.5); // Leve rechazo para LOW
-        }
-      }
+      // En OR-Tools modificar el costo del arco no garantiza orden de visita.
+      // Si es modo prioridad, el ordenamiento se maneja previamente o fuera de este callback.
       return distance;
     });
 

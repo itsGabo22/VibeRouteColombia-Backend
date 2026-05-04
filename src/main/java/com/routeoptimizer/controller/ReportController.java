@@ -46,9 +46,50 @@ public class ReportController {
                 .body(pdfBytes);
     }
 
+    @GetMapping("/generate-word")
+    public ResponseEntity<byte[]> generateOrdersReportWord(@RequestParam(required = false) String city) {
+        byte[] wordBytes = reportService.generateOrdersReportWord(city);
+        
+        String filename = (city != null && !city.trim().isEmpty() && !city.equalsIgnoreCase("undefined")) 
+            ? "Lista_Pedidos_" + city.trim() + ".docx" 
+            : "Reporte_Operativo_Pedidos.docx";
+        
+        return ResponseEntity.ok()
+                .contentType(org.springframework.http.MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.wordprocessingml.document"))
+                .header("Content-Disposition", "attachment; filename=\"" + filename + "\"")
+                .body(wordBytes);
+    }
+
+    @GetMapping("/generate-excel")
+    public ResponseEntity<byte[]> generateOrdersReportExcel(@RequestParam(required = false) String city) {
+        byte[] excelBytes = reportService.generateOrdersReportExcel(city);
+        
+        // Eliminamos el fallback global para el logístico. 
+        // Si no hay ciudad, el nombre será genérico, pero el contenido ya está filtrado en el service.
+        String filename = (city != null && !city.trim().isEmpty() && !city.equalsIgnoreCase("undefined")) 
+            ? "Lista_Pedidos_" + city.trim() + ".xlsx" 
+            : "Reporte_Operativo_Pedidos.xlsx";
+        
+        return ResponseEntity.ok()
+                .contentType(org.springframework.http.MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .header("Content-Disposition", "attachment; filename=\"" + filename + "\"")
+                .body(excelBytes);
+    }
+
+    @GetMapping("/generate-general-word")
+    public ResponseEntity<byte[]> generateGeneralReportWord(@RequestParam(required = false) String city) {
+        byte[] wordBytes = reportService.generateGeneralReportWord(city);
+        
+        String filename = (city != null && !city.isEmpty()) ? "Reporte_Estrategico_" + city + ".docx" : "Reporte_Estrategico_Global.docx";
+        
+        return ResponseEntity.ok()
+                .contentType(org.springframework.http.MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.wordprocessingml.document"))
+                .header("Content-Disposition", "attachment; filename=\"" + filename + "\"")
+                .body(wordBytes);
+    }
+
     @GetMapping
     public ResponseEntity<List<Map<String, String>>> listDocuments() {
         return ResponseEntity.ok(reportService.listDocuments());
     }
 }
-

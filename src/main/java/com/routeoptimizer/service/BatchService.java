@@ -292,6 +292,30 @@ public class BatchService {
     }
 
     @Transactional
+    public void checkAndCompleteBatch(Long batchId) {
+        Batch batch = findById(batchId);
+        if ("COMPLETED".equals(batch.getStatus())) {
+            return;
+        }
+
+        boolean allTerminal = batch.getOrders().stream().allMatch(o ->
+                o.getStatus() == OrderStatus.DELIVERED ||
+                o.getStatus() == OrderStatus.RETURNED ||
+                o.getStatus() == OrderStatus.CANCELLED);
+
+        if (allTerminal && !batch.getOrders().isEmpty()) {
+            batch.setStatus("COMPLETED");
+            Driver driver = batch.getDriver();
+            if (driver != null) {
+                driver.setStatus(DriverStatus.AVAILABLE);
+                driverRepository.save(driver);
+            }
+            batchRepository.save(batch);
+            log.info("Lote #{} completado automáticamente. Conductor {} está ahora AVAILABLE.", batchId, driver != null ? driver.getName() : "N/A");
+        }
+    }
+
+    @Transactional
     public Batch updateManifestUrl(Long id, String manifestUrl) {
         Batch batch = findById(id);
         batch.setManifestUrl(manifestUrl);

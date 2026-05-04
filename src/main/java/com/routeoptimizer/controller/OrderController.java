@@ -130,4 +130,14 @@ public class OrderController {
 
     return ResponseEntity.status(HttpStatus.CREATED).body(result);
   }
+
+  @DeleteMapping("/{id}")
+  public ResponseEntity<?> deleteOrder(@PathVariable Long id) {
+    try {
+      orderService.deleteOrder(id);
+      return ResponseEntity.ok(Map.of("message", "Pedido eliminado correctamente"));
+    } catch (RuntimeException e) {
+      return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", e.getMessage()));
+    }
+  }
 }

@@ -50,11 +50,15 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
         @Query("SELECT COUNT(o) FROM Order o WHERE o.status = com.routeoptimizer.model.enums.OrderStatus.DELIVERED AND o.actualDeliveryTime >= :start")
         long countSuccessfulDeliveriesSince(@Param("start") java.time.LocalDateTime start);
 
-        @Query("SELECT new com.routeoptimizer.dto.DriverRankingDTO(r.name, COUNT(o), 100.0, '') " +
-                        "FROM Order o JOIN Batch b ON o.batchId = b.id JOIN b.driver r " +
-                        "WHERE o.status = com.routeoptimizer.model.enums.OrderStatus.DELIVERED " +
-                        "GROUP BY r.name " +
-                        "ORDER BY COUNT(o) DESC")
+        @Query("SELECT new com.routeoptimizer.dto.DriverRankingDTO(" +
+               "r.name, " +
+               "SUM(CASE WHEN o.status = com.routeoptimizer.model.enums.OrderStatus.DELIVERED THEN 1L ELSE 0L END), " +
+               "(SUM(CASE WHEN o.status = com.routeoptimizer.model.enums.OrderStatus.DELIVERED THEN 1.0 ELSE 0.0 END) / COUNT(o)) * 100.0, " +
+               "'') " +
+               "FROM Order o JOIN Batch b ON o.batchId = b.id JOIN b.driver r " +
+               "WHERE o.status IN (com.routeoptimizer.model.enums.OrderStatus.DELIVERED, com.routeoptimizer.model.enums.OrderStatus.RETURNED, com.routeoptimizer.model.enums.OrderStatus.CANCELLED) " +
+               "GROUP BY r.name " +
+               "ORDER BY SUM(CASE WHEN o.status = com.routeoptimizer.model.enums.OrderStatus.DELIVERED THEN 1L ELSE 0L END) DESC")
         List<com.routeoptimizer.dto.DriverRankingDTO> getDriverRankings(
                         org.springframework.data.domain.Pageable pageable);
 
@@ -64,9 +68,18 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
         @Query("SELECT SUM(o.price) FROM Order o WHERE o.status = com.routeoptimizer.model.enums.OrderStatus.DELIVERED AND o.city = :city")
         java.math.BigDecimal getRevenueByCity(@Param("city") String city);
 
-        @Query(value = "SELECT TRIM(TO_CHAR(o.actual_delivery_time, 'Month')) as month, COALESCE(SUM(o.price), 0) as total " +
-                   "FROM orders o WHERE o.status = 'DELIVERED' AND o.actual_delivery_time IS NOT NULL " +
-                   "AND (:city IS NULL OR o.city = :city) " +
-                   "GROUP BY month", nativeQuery = true)
-        List<Object[]> getMonthlyRevenueNative(@Param("city") String city);
+    @Query(value = "SELECT TRIM(TO_CHAR(o.actual_delivery_time, 'Month')) as month, COALESCE(SUM(o.price), 0) as total " +
+               "FROM orders o WHERE o.status = 'DELIVERED' AND o.actual_delivery_time IS NOT NULL " +
+               "AND (:city IS NULL OR o.city = :city) " +
+               "GROUP BY month", nativeQuery = true)
+    List<Object[]> getMonthlyRevenueNative(@Param("city") String city);
+
+    @Query("SELECT COUNT(o) FROM Order o JOIN Batch b ON o.batchId = b.id JOIN b.driver r WHERE r.name = :name AND o.status = com.routeoptimizer.model.enums.OrderStatus.DELIVERED")
+    long countSuccessfulDeliveriesForDriver(@Param("name") String name);
+
+    @Query("SELECT COUNT(o) FROM Order o JOIN Batch b ON o.batchId = b.id JOIN b.driver r WHERE r.name = :name AND (o.status = com.routeoptimizer.model.enums.OrderStatus.CANCELLED OR o.status = com.routeoptimizer.model.enums.OrderStatus.RETURNED)")
+    long countFailedDeliveriesForDriver(@Param("name") String name);
+
+    @Query("SELECT o FROM Order o LEFT JOIN Batch b ON o.batchId = b.id LEFT JOIN b.driver d")
+    List<Order> findAllWithDriver();
 }

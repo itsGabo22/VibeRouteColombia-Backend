@@ -157,26 +157,23 @@ public class ContextualAdvisor {
       int totalCancelled, int totalReturned, int efficiencyScore,
       double totalHours, String city) {
     String prompt = String.format("""
-        Eres el asistente logístico de VibeRoute Colombia. Genera un resumen BREVE de la jornada:
+        Eres el asistente logístico de VibeRoute Colombia. Escribe un resumen ESTRICTO de la jornada exactamente con esta estructura y tono:
 
-        - Ciudad: %s
-        - Pedidos entregados: %d
-        - Pedidos cancelados: %d
-        - Pedidos devueltos: %d
-        - Pedidos pendientes: %d
-        - Tiempo total: %.1f horas
-        - Score de Eficiencia: %d%%
+        "Buenas tardes, equipo. Aquí va el resumen de la jornada de hoy en %s: Hoy en %s, la jornada de VibeRoute culminó con %d pedidos entregados, %d cancelado(s) y %d devuelto(s), dejando %d pendientes en un tiempo total de %.1f horas. El score de eficiencia fue del %d%%. [Añade aquí 1-2 oraciones analizando si el score es bueno o malo dependiendo de la tasa de cancelaciones/devoluciones y da una sugerencia logística directa. Por ejemplo: 'Si bien el tiempo de operación fue corto, la alta tasa de cancelaciones...']"
 
-        Genera un resumen de 2-3 oraciones evaluando el rendimiento y sugiriendo mejoras.
-        Considera que una alta tasa de devoluciones/cancelaciones baja la eficiencia, evalúalo críticamente si aplica.
-        Responde en español colombiano. NO uses emojis. NO menciones que eres una IA.
+        Reglas estrictas:
+        - Debes iniciar EXACTAMENTE con "Buenas tardes, equipo."
+        - Responde en español colombiano profesional.
+        - NO uses emojis.
+        - NO menciones que eres una IA.
+        - Solo completa el corchete con el análisis.
         """,
-        city, totalDelivered, totalCancelled, totalReturned, totalPending, totalHours, efficiencyScore);
+        city, city, totalDelivered, totalCancelled, totalReturned, totalPending, totalHours, efficiencyScore);
 
     String fallback = String.format(
-        "Jornada en %s: %d entregados, %d cancelados/devueltos, %d pendientes en %.1f horas. %s",
-        city, totalDelivered, (totalCancelled + totalReturned), totalPending, totalHours,
-        efficiencyScore >= 80 ? "Excelente rendimiento." : "Se recomienda evaluar las causas de no entrega para mejorar la eficiencia.");
+        "Buenas tardes, equipo. Aquí va el resumen de la jornada de hoy en %s: Hoy en %s, la jornada de VibeRoute culminó con %d pedidos entregados, %d cancelado(s) y %d devuelto(s), dejando %d pendientes en un tiempo total de %.1f horas. El score de eficiencia fue del %d%%. %s",
+        city, city, totalDelivered, totalCancelled, totalReturned, totalPending, totalHours, efficiencyScore,
+        efficiencyScore >= 80 ? "Excelente rendimiento, mantengan el buen trabajo." : "Es crucial investigar las causas raíz de estas novedades para mejorar la tasa de éxito.");
 
     return geminiClient.generateText(prompt, fallback);
   }

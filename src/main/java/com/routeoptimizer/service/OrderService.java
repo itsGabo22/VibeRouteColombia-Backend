@@ -76,7 +76,7 @@ public class OrderService {
 
   @Transactional(readOnly = true)
   public List<Order> findAll() {
-    return orderRepository.findAll();
+    return orderRepository.findAllWithDriver();
   }
 
   @Transactional(readOnly = true)
@@ -104,7 +104,28 @@ public class OrderService {
 
     Order savedOrder = orderRepository.save(order);
 
-    messagingTemplate.convertAndSend("/topic/logistica", Map.of(
+    if (order.getBatchId() != null && 
+        (newStatus == OrderStatus.DELIVERED || newStatus == OrderStatus.RETURNED || newStatus == OrderStatus.CANCELLED)) {
+        
+        // Actualizar estadísticas del repartidor
+        try {
+            com.routeoptimizer.model.entity.Batch batch = batchService.findById(order.getBatchId());
+            if (batch != null && batch.getDriver() != null) {
+                com.routeoptimizer.model.entity.Driver driver = batch.getDriver();
+                if (newStatus == OrderStatus.DELIVERED) {
+                    driver.setCompletedOrders((driver.getCompletedOrders() != null ? driver.getCompletedOrders() : 0) + 1);
+                } else {
+                    driver.setFailedOrders((driver.getFailedOrders() != null ? driver.getFailedOrders() : 0) + 1);
+                }
+            }
+        } catch (Exception e) {
+            // Ignorar errores de estadísticas para no bloquear la transición
+        }
+        
+        batchService.checkAndCompleteBatch(order.getBatchId());
+    }
+
+    messagingTemplate.convertAndSend("/topic/logistics", Map.of(
         "orderId", savedOrder.getId(),
         "newStatus", savedOrder.getStatus(),
         "city", savedOrder.getCity(),
@@ -148,17 +169,27 @@ public class OrderService {
   @Transactional(readOnly = true)
   public OrderResponseDTO enrichOrderResponse(Order order) {
     OrderResponseDTO dto = OrderResponseDTO.fromEntity(order);
-    if (order.getBatchId() != null) {
+    // Nota: El driverName ya se puede poblar desde el JOIN del repositorio si se mapea correctamente,
+    // o podemos mantener esta lógica pero sabiendo que findAll() ya trajo los objetos Batch en memoria.
+    if (order.getBatchId() != null && dto.getDriverName() == null) {
       try {
         com.routeoptimizer.model.entity.Batch batch = batchService.findById(order.getBatchId());
         if (batch != null && batch.getDriver() != null) {
           dto.setDriverName(batch.getDriver().getName());
         }
-      } catch (Exception e) {
-        // Ignoramos si el lote no existe, simplemente no poblamos el driver
-      }
+      } catch (Exception e) {}
     }
     return dto;
+  }
+
+  @Transactional
+  public void deleteOrder(Long id) {
+    Order order = findById(id);
+    // Si el pedido tiene un lote, avisar o desvincular
+    if (order.getBatchId() != null) {
+      // Opcional: loguear que se eliminó un pedido asignado
+    }
+    orderRepository.delete(order);
   }
 }
 
