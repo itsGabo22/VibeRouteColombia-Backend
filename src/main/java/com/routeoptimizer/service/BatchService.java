@@ -279,7 +279,7 @@ public class BatchService {
     public Optional<Batch> findActiveBatchByDriverName(String driverName) {
         return batchRepository.findAll().stream()
                 .filter(b -> b.getDriver() != null && b.getDriver().getName().equalsIgnoreCase(driverName))
-                .filter(b -> !"COMPLETED".equals(b.getStatus()))
+                .filter(b -> !"COMPLETED".equals(b.getStatus()) && !"CANCELLED".equals(b.getStatus()))
                 .findFirst();
     }
 
@@ -287,9 +287,10 @@ public class BatchService {
     public Optional<Batch> findActiveBatchByDriverId(Long driverId) {
         return batchRepository.findAll().stream()
                 .filter(b -> b.getDriver() != null && b.getDriver().getId().equals(driverId))
-                .filter(b -> !"COMPLETED".equals(b.getStatus()))
+                .filter(b -> !"COMPLETED".equals(b.getStatus()) && !"CANCELLED".equals(b.getStatus()))
                 .findFirst();
     }
+
 
     @Transactional
     public void checkAndCompleteBatch(Long batchId) {

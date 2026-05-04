@@ -57,7 +57,8 @@ public class SecurityConfig {
             // Shared Logistics/Admin access
             .requestMatchers("/api/v1/orders", "/api/v1/orders/**", "/orders", "/orders/**",
                              "/api/v1/stats", "/api/v1/stats/**", "/stats", "/stats/**",
-                             "/api/v1/reports", "/api/v1/reports/**", "/reports", "/reports/**").hasAnyRole("LOGISTICS", "ADMIN", "SUPER_ADMIN")
+                             "/api/v1/reports", "/api/v1/reports/**", "/reports", "/reports/**",
+                             "/api/v1/batches", "/api/v1/batches/**", "/batches", "/batches/**").hasAnyRole("DRIVER", "LOGISTICS", "ADMIN", "SUPER_ADMIN")
             
             // Operational monitoring (Explicitly permissive for testing)
             .requestMatchers("/api/v1/batches/**", "/batches/**",

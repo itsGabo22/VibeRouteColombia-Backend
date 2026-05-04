@@ -29,15 +29,32 @@ public class BatchController {
         this.orderRepository = orderRepository;
     }
 
+    /**
+     * Lista todos los lotes. NO serializa entidades Batch con lazy collections.
+     * Los drivers NO deben usar este endpoint para cargar sus pedidos
+     * (deben usar GET /orders que retorna DTOs seguros).
+     */
     @GetMapping
-    public ResponseEntity<List<Batch>> listAll() {
-        return ResponseEntity.ok(batchService.findAll());
+    public ResponseEntity<?> listAll() {
+        try {
+            return ResponseEntity.ok(batchService.findAll());
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(Map.of("error", "Error al listar lotes: " + e.getMessage()));
+        }
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<?> getBatch(@PathVariable Long id) {
         try {
-            return ResponseEntity.ok(batchService.findById(id));
+            Batch batch = batchService.findById(id);
+            if (batch == null) return ResponseEntity.noContent().build();
+            
+            // Retornamos un Map seguro para evitar LazyInitializationException en collections
+            return ResponseEntity.ok(Map.of(
+                "id", batch.getId(),
+                "aiCopilotTips", batch.getAiCopilotTips() != null ? batch.getAiCopilotTips() : "",
+                "driver", batch.getDriver() != null ? Map.of("id", batch.getDriver().getId(), "name", batch.getDriver().getName()) : Map.of()
+            ));
         } catch (Exception e) {
             return ResponseEntity.noContent().build();
         }
@@ -91,7 +108,6 @@ public class BatchController {
     @PostMapping("/smart-dispatch/apply")
     public ResponseEntity<Map<String, String>> applySmartDispatch(@RequestBody Map<String, Object> body) {
         try {
-            // Recibimos una versión simplificada: un mapa de zonas con sus IDs de pedidos y conductor
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> clusters = (List<Map<String, Object>>) body.get("clusters");
             

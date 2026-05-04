@@ -69,17 +69,46 @@ public class RouteOptimizer {
     // 1. Ejecutar el motor de optimización (Estrategia)
     Route optimizedRoute;
     if ("PRIORITY".equalsIgnoreCase(mode)) {
-        // En modo prioridad estricto, ordenamos primero por prioridad y luego por distancia si es posible.
-        // Como simplificación robusta: HIGH primero, luego MEDIUM, luego LOW.
-        List<Order> sortedOrders = new java.util.ArrayList<>(orders);
-        sortedOrders.sort((o1, o2) -> {
-            int p1 = o1.getPriority() != null ? o1.getPriority().ordinal() : 1; // Default MEDIUM
-            int p2 = o2.getPriority() != null ? o2.getPriority().ordinal() : 1;
-            return Integer.compare(p1, p2); // HIGH(0), MEDIUM(1), LOW(2)
-        });
+        // Agrupar por prioridad para optimizar geográficamente dentro de cada nivel
+        List<Order> highPriority = new java.util.ArrayList<>();
+        List<Order> mediumPriority = new java.util.ArrayList<>();
+        List<Order> lowPriority = new java.util.ArrayList<>();
+
+        for (Order o : orders) {
+            if (o.getPriority() == com.routeoptimizer.model.enums.Priority.HIGH) highPriority.add(o);
+            else if (o.getPriority() == com.routeoptimizer.model.enums.Priority.LOW) lowPriority.add(o);
+            else mediumPriority.add(o);
+        }
+
+        List<Order> finalStops = new java.util.ArrayList<>();
+        Coordinate currentStart = startLocation;
+        long totalDist = 0;
+
+        // Optimizar HIGH
+        if (!highPriority.isEmpty()) {
+            Route r = optimizationStrategy.optimize(highPriority, currentStart, "EFFICIENCY");
+            finalStops.addAll(r.getStops());
+            totalDist += r.getTotalDistanceMeters();
+            currentStart = r.getStops().get(r.getStops().size() - 1).getLocation();
+        }
+        // Optimizar MEDIUM
+        if (!mediumPriority.isEmpty()) {
+            Route r = optimizationStrategy.optimize(mediumPriority, currentStart, "EFFICIENCY");
+            finalStops.addAll(r.getStops());
+            totalDist += r.getTotalDistanceMeters();
+            currentStart = r.getStops().get(r.getStops().size() - 1).getLocation();
+        }
+        // Optimizar LOW
+        if (!lowPriority.isEmpty()) {
+            Route r = optimizationStrategy.optimize(lowPriority, currentStart, "EFFICIENCY");
+            finalStops.addAll(r.getStops());
+            totalDist += r.getTotalDistanceMeters();
+        }
+
         optimizedRoute = new Route.Builder()
             .forBatch(batchId)
-            .withStops(sortedOrders)
+            .withStops(finalStops)
+            .withTotalDistance(totalDist)
             .build();
     } else {
         // MODO EFICIENCIA: Usar OR-Tools para TSP

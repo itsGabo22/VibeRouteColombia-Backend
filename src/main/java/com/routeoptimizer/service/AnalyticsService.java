@@ -48,7 +48,7 @@ public class AnalyticsService {
         if (revenue == null) revenue = java.math.BigDecimal.ZERO;
 
         java.math.BigDecimal totalCosts = java.math.BigDecimal.ZERO;
-        List<com.routeoptimizer.model.entity.Route> routes = routeRepository.findAll();
+        List<com.routeoptimizer.model.entity.Route> routes = routeRepository.findAllOptimized();
 
         for (com.routeoptimizer.model.entity.Route route : routes) {
             if (route.getDriverId() != null) {

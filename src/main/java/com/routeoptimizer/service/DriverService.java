@@ -11,6 +11,8 @@ import com.routeoptimizer.repository.OrderRepository;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 
 import com.routeoptimizer.model.entity.Batch;
 import com.routeoptimizer.model.entity.Order;
@@ -27,6 +29,9 @@ public class DriverService {
   private final DriverRepository driverRepository;
   private final BatchService batchService;
   private final OrderRepository orderRepository;
+
+  @PersistenceContext
+  private EntityManager entityManager;
 
   public DriverService(DriverRepository driverRepository, @Lazy BatchService batchService, OrderRepository orderRepository) {
     this.driverRepository = driverRepository;
@@ -101,8 +106,13 @@ public class DriverService {
     return driverRepository.save(driver);
   }
 
-  @Transactional(readOnly = true)
+  @Transactional
   public List<DriverResponseDTO> getFleetStatus() {
+    // SINCRONIZACIÓN FORZADA: Limpiar caché de primer nivel de Hibernate para leer la realidad de la DB
+    if (entityManager != null) {
+        entityManager.clear();
+    }
+    
     List<Driver> drivers = driverRepository.findAll();
     java.time.LocalDateTime startOfDay = java.time.LocalDate.now().atStartOfDay();
 
@@ -117,17 +127,36 @@ public class DriverService {
         dto.setCompletedOrders((int)successful);
         dto.setFailedOrders((int)failed);
 
-        // Buscar carga activa por ID del conductor
-        batchService.findActiveBatchByDriverId(d.getId()).ifPresent(batch -> {
-          dto.setCurrentBatchId(batch.getId());
-          dto.setCurrentOrdersCount(batch.getOrders() != null ? batch.getOrders().size() : 0);
-          dto.setActiveAddresses(batch.getOrders() != null 
-              ? batch.getOrders().stream()
-                  .map(Order::getAddress)
-                  .limit(3)
-                  .collect(Collectors.toList())
-              : java.util.Collections.emptyList());
-        });
+        // Buscar carga activa por ID del conductor (excluye COMPLETED automáticamente)
+        java.util.Optional<Batch> activeBatch = batchService.findActiveBatchByDriverId(d.getId());
+        
+        boolean hasActualPendingOrders = false;
+        if (activeBatch.isPresent()) {
+          Batch batch = activeBatch.get();
+          // Verificar si realmente hay pedidos que no sean terminales
+          hasActualPendingOrders = batch.getOrders().stream().anyMatch(o -> 
+              o.getStatus() == com.routeoptimizer.model.enums.OrderStatus.ON_ROUTE || 
+              o.getStatus() == com.routeoptimizer.model.enums.OrderStatus.PENDING);
+
+          if (hasActualPendingOrders) {
+            dto.setCurrentBatchId(batch.getId());
+            dto.setCurrentOrdersCount(batch.getOrders().size());
+            dto.setActiveAddresses(batch.getOrders().stream()
+                .map(Order::getAddress)
+                .limit(3)
+                .collect(Collectors.toList()));
+          }
+        }
+
+        if (!hasActualPendingOrders && d.getStatus() == DriverStatus.ON_ROUTE) {
+          // AUTO-CORRECCIÓN DEFINITIVA: Si no hay lote con pedidos reales activos, LIBERAR
+          d.setStatus(DriverStatus.AVAILABLE);
+          driverRepository.save(d);
+          dto.setStatus(DriverStatus.AVAILABLE);
+          dto.setCurrentBatchId(null);
+          dto.setCurrentOrdersCount(0);
+          System.out.println("[FLEET-STATUS] Final-Release: Driver " + d.getName() + " had no active orders. Status fixed to AVAILABLE.");
+        }
         
         result.add(dto);
       } catch (Exception e) {

@@ -54,11 +54,23 @@ public class RouteService {
     if (stops != null && stops.size() > 1) {
        Coordinate origin = stops.get(0).getLocation(); 
        Coordinate destination = stops.get(stops.size() - 1).getLocation();
-       List<Coordinate> waypoints = stops.size() > 2 
-          ? stops.subList(1, stops.size() - 1).stream().map(Order::getLocation).toList()
-          : null;
        
-       encodedPolyline = mapService.getDirections(origin, destination, waypoints);
+       if (origin != null && destination != null) {
+           List<Coordinate> waypoints = stops.size() > 2 
+              ? stops.subList(1, stops.size() - 1).stream()
+                  .map(Order::getLocation)
+                  .filter(loc -> loc != null) // Avoid null waypoints
+                  .toList()
+              : null;
+           
+           try {
+               encodedPolyline = mapService.getDirections(origin, destination, waypoints);
+           } catch (Exception e) {
+               log.warn("Failed to get directions polyline: {}", e.getMessage());
+           }
+       } else {
+           log.warn("Cannot generate directions: origin or destination location is null.");
+       }
     }
 
     Route routeToSave = new Route.Builder()
@@ -90,7 +102,7 @@ public class RouteService {
 
   @Transactional(readOnly = true)
   public List<Route> findAll() {
-    return routeRepository.findAll();
+    return routeRepository.findAllOptimized();
   }
 
   @Transactional(readOnly = true)

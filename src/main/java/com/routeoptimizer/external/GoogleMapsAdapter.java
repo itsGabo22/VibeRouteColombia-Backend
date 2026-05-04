@@ -202,9 +202,30 @@ public class GoogleMapsAdapter implements MapService {
             }
           }
         }
+        return matrix;
+      } else {
+        log.warn("Google Maps API returned {}. Falling back to Euclidean.", response != null ? response.path("status").asText() : "null");
       }
     } catch (Exception e) {
       log.error("Error getting distance matrix: {}", e.getMessage());
+    }
+
+    log.warn("Calculating Euclidean distances for optimization as fallback.");
+    for (int i = 0; i < n; i++) {
+      for (int j = 0; j < n; j++) {
+        if (i == j) {
+          matrix[i][j] = 0;
+        } else {
+          Coordinate p1 = points.get(i);
+          Coordinate p2 = points.get(j);
+          if (p1 == null || p2 == null || p1.getLat() == null || p2.getLat() == null) {
+              matrix[i][j] = 999999;
+          } else {
+              double d = Math.sqrt(Math.pow(p1.getLat() - p2.getLat(), 2) + Math.pow(p1.getLng() - p2.getLng(), 2)) * 111320;
+              matrix[i][j] = (long) d;
+          }
+        }
+      }
     }
 
     return matrix;

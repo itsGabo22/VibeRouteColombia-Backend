@@ -23,12 +23,14 @@ public class SmartDispatchService {
     private final OrderRepository orderRepository;
     private final DriverRepository driverRepository;
     private final ContextualAdvisor contextualAdvisor;
+    private final DriverService driverService;
     private final BatchService batchService;
 
-    public SmartDispatchService(OrderRepository orderRepository, DriverRepository driverRepository, ContextualAdvisor contextualAdvisor, BatchService batchService) {
+    public SmartDispatchService(OrderRepository orderRepository, DriverRepository driverRepository, ContextualAdvisor contextualAdvisor, DriverService driverService, BatchService batchService) {
         this.orderRepository = orderRepository;
         this.driverRepository = driverRepository;
         this.contextualAdvisor = contextualAdvisor;
+        this.driverService = driverService;
         this.batchService = batchService;
     }
 
@@ -37,6 +39,9 @@ public class SmartDispatchService {
 
     public SmartDispatchPlanDTO suggestDispatchPlan(String city) {
         log.info("Generating Smart Dispatch Plan for city: {}", city);
+
+        // SINCRONIZACIÓN PREVIA: Forzamos la limpieza de conductores antes de calcular el plan
+        driverService.getFleetStatus();
 
         List<Order> allPending = orderRepository.findByStatus(OrderStatus.PENDING);
         
@@ -65,7 +70,11 @@ public class SmartDispatchService {
         }
 
         // --- SISTEMA DE CACHÉ ---
-        // Creamos una firma basada en los IDs de los pedidos para saber si algo cambió
+        // Forzamos limpieza si hay pedidos para asegurar datos frescos de conductores
+        if (!unassignedPending.isEmpty()) {
+            planCache.remove(finalCity);
+        }
+        
         int currentOrderHash = pendingOrders.stream().map(o -> o.getId().toString()).collect(Collectors.joining(",")).hashCode();
         if (planCache.containsKey(finalCity) && orderHashCache.getOrDefault(finalCity, 0) == currentOrderHash) {
             log.info("Returning cached plan for city: {}", finalCity);
@@ -75,14 +84,18 @@ public class SmartDispatchService {
 
         List<Driver> cityDrivers = driverRepository.findByAssignedCityIgnoreCase(finalCity);
         log.info("City drivers for '{}': {} total", finalCity, cityDrivers.size());
-        cityDrivers.forEach(d -> log.info("  -> Driver: {} (ID={}, status={})", d.getName(), d.getId(), d.getStatus()));
 
+        // SINCRONIZACIÓN DINÁMICA: Usamos el estado real de la flota para garantizar datos frescos
+        List<com.routeoptimizer.dto.DriverResponseDTO> fleetStatus = driverService.getFleetStatus();
+        
         List<Driver> availableDrivers = cityDrivers.stream()
-                .filter(d -> d.getStatus() == DriverStatus.AVAILABLE)
+                .filter(d -> fleetStatus.stream()
+                    .anyMatch(fs -> fs.getId().equals(d.getId()) && fs.getStatus() == DriverStatus.AVAILABLE))
                 .collect(Collectors.toList());
 
         List<Driver> onRouteDrivers = cityDrivers.stream()
-                .filter(d -> d.getStatus() == DriverStatus.ON_ROUTE)
+                .filter(d -> fleetStatus.stream()
+                    .anyMatch(fs -> fs.getId().equals(d.getId()) && fs.getStatus() == DriverStatus.ON_ROUTE))
                 .collect(Collectors.toList());
 
         // Determinar K (número de zonas)
@@ -119,9 +132,15 @@ public class SmartDispatchService {
         plan.setAlternativeClusters(alternativeClusters);
         plan.setAiReport(aiReport);
 
-        // Guardar en caché antes de retornar
+        // Guardar en caché antes de retornar (Nota: En desarrollo forzamos refresco para evitar datos viejos de conductores)
         planCache.put(finalCity, plan);
         orderHashCache.put(finalCity, currentOrderHash);
+        
+        // Limpiamos caché de otras ciudades para liberar memoria
+        if (planCache.size() > 5) {
+            planCache.clear();
+            orderHashCache.clear();
+        }
 
         return plan;
     }
@@ -257,13 +276,16 @@ public class SmartDispatchService {
             int totalOrders = primary.stream().mapToInt(c -> c.getOrders().size()).sum();
             int zones = primary.size();
 
+            String currentDate = java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("dd 'de' MMMM 'de' yyyy", new java.util.Locale("es", "ES")));
+            
             StringBuilder context = new StringBuilder();
             context.append("Actúa como un Consultor Senior de Logística e IA de VibeRoute. ");
             context.append("TU OBJETIVO: Generar un reporte ejecutivo de alto nivel para el despacho en ").append(city).append(". ");
+            context.append("FECHA ACTUAL: ").append(currentDate).append(". ");
             context.append("DATOS ACTUALES: ").append(totalOrders).append(" pedidos agrupados en ").append(zones).append(" zonas geográficas optimizadas. ");
             context.append("No pidas más información ni uses placeholders, genera el reporte analítico directamente. ");
-
-            context.append("\n\nESTRUCTURA DEL REPORTE:\n");
+            
+            context.append("\n\nESTRUCTURA DEL REPORTE (Asegúrate de incluir la fecha actual en el encabezado del texto):\n");
             context.append("1. **RESUMEN OPERATIVO**: Análisis de la zonificación y eficiencia de la flota.\n");
             context.append("2. **IMPACTO ESTIMADO**: Reducción de backtracking, ahorro de combustible y mejora en tiempos.\n");
             context.append("3. **RECOMENDACIÓN**: Estrategia sugerida para el despacho inmediato.\n");

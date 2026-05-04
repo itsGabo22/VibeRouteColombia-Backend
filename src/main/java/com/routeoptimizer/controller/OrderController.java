@@ -37,8 +37,25 @@ public class OrderController {
   }
 
   @GetMapping
-  public ResponseEntity<List<OrderResponseDTO>> listAll() {
-    List<OrderResponseDTO> orders = orderService.findAll().stream()
+  public ResponseEntity<List<OrderResponseDTO>> listAll(@RequestParam(required = false) String city) {
+    String filterCity = city;
+    
+    // AISLAMIENTO REGIONAL: Forzar filtro por ciudad si el usuario es Logístico
+    var auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+    if (auth != null && auth.getPrincipal() instanceof com.routeoptimizer.model.entity.User user) {
+        if (user.getRole() == com.routeoptimizer.model.enums.Role.LOGISTICS) {
+            filterCity = user.getAssignedCity();
+        }
+    }
+
+    List<Order> rawOrders;
+    if (filterCity != null && !filterCity.isEmpty()) {
+        rawOrders = orderService.findByCity(filterCity);
+    } else {
+        rawOrders = orderService.findAll();
+    }
+
+    List<OrderResponseDTO> orders = rawOrders.stream()
         .map(orderService::enrichOrderResponse)
         .collect(Collectors.toList());
     return ResponseEntity.ok(orders);
