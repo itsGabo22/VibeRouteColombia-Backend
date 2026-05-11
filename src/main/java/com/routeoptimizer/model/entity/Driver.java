@@ -26,6 +26,12 @@ public class Driver extends User {
   @Column(name = "cost_per_hour", precision = 10, scale = 2)
   private java.math.BigDecimal costPerHour;
 
+  @Column(name = "completed_orders")
+  private Integer completedOrders = 0;
+
+  @Column(name = "failed_orders")
+  private Integer failedOrders = 0;
+
   public Driver() {
     super();
   }
@@ -76,5 +82,21 @@ public class Driver extends User {
 
   public void setCostPerHour(java.math.BigDecimal costPerHour) {
     this.costPerHour = costPerHour;
+  }
+
+  public Integer getCompletedOrders() {
+    return completedOrders;
+  }
+
+  public void setCompletedOrders(Integer completedOrders) {
+    this.completedOrders = completedOrders;
+  }
+
+  public Integer getFailedOrders() {
+    return failedOrders;
+  }
+
+  public void setFailedOrders(Integer failedOrders) {
+    this.failedOrders = failedOrders;
   }
 }

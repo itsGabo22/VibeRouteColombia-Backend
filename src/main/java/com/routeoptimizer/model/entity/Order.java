@@ -3,6 +3,9 @@ package com.routeoptimizer.model.entity;
 import com.routeoptimizer.model.Coordinate;
 import com.routeoptimizer.model.enums.OrderStatus;
 import com.routeoptimizer.model.enums.Priority;
+import com.routeoptimizer.state.OrderState;
+import com.routeoptimizer.state.PendingState;
+import com.routeoptimizer.state.StateFactory;
 
 import jakarta.persistence.*;
 
@@ -27,6 +30,9 @@ public class Order {
 
   @Column(nullable = false)
   private String address;
+
+  @Column(name = "client_name")
+  private String clientName;
 
   @Embedded
   private Coordinate location;
@@ -60,6 +66,9 @@ public class Order {
   @Column(name = "delivery_order")
   private Integer deliveryOrder;
 
+  @Column(name = "route_id")
+  private Long routeId;
+
   @Column(name = "actual_delivery_time")
   private LocalDateTime actualDeliveryTime;
 
@@ -75,7 +84,31 @@ public class Order {
   @Column(precision = 10, scale = 2)
   private java.math.BigDecimal price;
 
+  @Transient
+  @com.fasterxml.jackson.annotation.JsonIgnore
+  private OrderState stateObject;
+
   public Order() {
+    this.status = OrderStatus.PENDING;
+    this.stateObject = new PendingState();
+  }
+
+  @PostLoad
+  private void onLoad() {
+    this.stateObject = StateFactory.getState(this.status);
+  }
+
+  public void changeState(OrderState newState) {
+    this.stateObject = newState;
+    this.status = newState.getStatus();
+  }
+
+  @com.fasterxml.jackson.annotation.JsonIgnore
+  public OrderState getStateObject() {
+    if (this.stateObject == null) {
+      this.stateObject = StateFactory.getState(this.status);
+    }
+    return this.stateObject;
   }
 
   public Double getLat() {
@@ -110,6 +143,14 @@ public class Order {
     this.address = address;
   }
 
+  public String getClientName() {
+    return clientName;
+  }
+
+  public void setClientName(String clientName) {
+    this.clientName = clientName;
+  }
+
   public Coordinate getLocation() {
     return location;
   }
@@ -132,6 +173,7 @@ public class Order {
 
   public void setStatus(OrderStatus status) {
     this.status = status;
+    this.stateObject = StateFactory.getState(status);
   }
 
   public LocalDate getDate() {
@@ -166,6 +208,7 @@ public class Order {
     this.clientReference = clientReference;
   }
 
+
   public String getCity() {
     return city;
   }
@@ -188,6 +231,14 @@ public class Order {
 
   public void setDeliveryOrder(Integer deliveryOrder) {
     this.deliveryOrder = deliveryOrder;
+  }
+
+  public Long getRouteId() {
+    return routeId;
+  }
+
+  public void setRouteId(Long routeId) {
+    this.routeId = routeId;
   }
 
   public LocalDateTime getActualDeliveryTime() {

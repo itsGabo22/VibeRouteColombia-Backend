@@ -22,5 +22,5 @@ public interface OptimizationStrategy {
    *                      repartidor).
    * @return Un objeto Ruta con el orden optimizado y métricas de distancia.
    */
-  Route optimize(List<Order> orders, Coordinate startLocation);
+  Route optimize(List<Order> orders, Coordinate startLocation, String mode);
 }

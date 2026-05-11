@@ -36,8 +36,8 @@ public class GoogleMapsAdapter implements MapService {
   @Cacheable(value = "geocoding", key = "#address + '|' + #city")
   public Coordinate geocode(String address, String city) {
     if (apiKey == null || apiKey.isEmpty()) {
-      log.error("Google Maps API Key not detected. Using fallback (Bogotá).");
-      return new Coordinate(4.6097, -74.0817);
+      log.error("Google Maps API Key not detected. Using City Fallback for {}.", city);
+      return getCityFallback(city);
     }
 
     // 1. Professional cleaning and preparation for Colombia
@@ -71,13 +71,19 @@ public class GoogleMapsAdapter implements MapService {
         return new Coordinate(lat, lng);
       } else {
         String errorStatus = response != null ? response.path("status").asText() : "UNKNOWN";
-        log.warn("❌ Google Geocode failed ({}). Using Bogotá default.", errorStatus);
-        return new Coordinate(4.6097, -74.0817);
+        log.warn("❌ Google Geocode failed ({}). Using city fallback for {}.", errorStatus, city);
+        return getCityFallback(city);
       }
     } catch (Exception e) {
       log.error("💥 Critical error in Google Maps Adapter: {}", e.getMessage());
-      return new Coordinate(4.6097, -74.0817);
+      return getCityFallback(city);
     }
+  }
+
+  private Coordinate getCityFallback(String city) {
+    if (city.equalsIgnoreCase("Medellín")) return new Coordinate(6.2442, -75.5812);
+    if (city.equalsIgnoreCase("Pasto")) return new Coordinate(1.2136, -77.2811);
+    return new Coordinate(4.6097, -74.0817); // Bogotá default
   }
 
   @Override
@@ -143,6 +149,25 @@ public class GoogleMapsAdapter implements MapService {
     long[][] matrix = new long[n][n];
 
     if (apiKey == null || apiKey.isEmpty() || n <= 1) {
+      log.warn("Google Maps API Key not detected. Calculating Euclidean distances for optimization.");
+      for (int i = 0; i < n; i++) {
+        for (int j = 0; j < n; j++) {
+          if (i == j) {
+            matrix[i][j] = 0;
+          } else {
+            Coordinate p1 = points.get(i);
+            Coordinate p2 = points.get(j);
+            
+            if (p1 == null || p2 == null || p1.getLat() == null || p2.getLat() == null) {
+                matrix[i][j] = 999999;
+            } else {
+                // Simple Euclidean distance (approximate meters)
+                double d = Math.sqrt(Math.pow(p1.getLat() - p2.getLat(), 2) + Math.pow(p1.getLng() - p2.getLng(), 2)) * 111320;
+                matrix[i][j] = (long) d;
+            }
+          }
+        }
+      }
       return matrix;
     }
 
@@ -177,12 +202,66 @@ public class GoogleMapsAdapter implements MapService {
             }
           }
         }
+        return matrix;
+      } else {
+        log.warn("Google Maps API returned {}. Falling back to Euclidean.", response != null ? response.path("status").asText() : "null");
       }
     } catch (Exception e) {
       log.error("Error getting distance matrix: {}", e.getMessage());
     }
 
+    log.warn("Calculating Euclidean distances for optimization as fallback.");
+    for (int i = 0; i < n; i++) {
+      for (int j = 0; j < n; j++) {
+        if (i == j) {
+          matrix[i][j] = 0;
+        } else {
+          Coordinate p1 = points.get(i);
+          Coordinate p2 = points.get(j);
+          if (p1 == null || p2 == null || p1.getLat() == null || p2.getLat() == null) {
+              matrix[i][j] = 999999;
+          } else {
+              double d = Math.sqrt(Math.pow(p1.getLat() - p2.getLat(), 2) + Math.pow(p1.getLng() - p2.getLng(), 2)) * 111320;
+              matrix[i][j] = (long) d;
+          }
+        }
+      }
+    }
+
     return matrix;
+  }
+
+  @Override
+  public String getDirections(Coordinate origin, Coordinate destination, List<Coordinate> waypoints) {
+    if (apiKey == null || apiKey.isEmpty())
+      return null;
+
+    UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl("https://maps.googleapis.com/maps/api/directions/json")
+        .queryParam("origin", origin.getLat() + "," + origin.getLng())
+        .queryParam("destination", destination.getLat() + "," + destination.getLng())
+        .queryParam("key", apiKey);
+
+    if (waypoints != null && !waypoints.isEmpty()) {
+      StringBuilder sb = new StringBuilder();
+      // Google standard limit is 25 waypoints (23 intermediate + origin + dest)
+      int limit = Math.min(waypoints.size(), 23);
+      for (int i = 0; i < limit; i++) {
+        sb.append(waypoints.get(i).getLat()).append(",").append(waypoints.get(i).getLng());
+        if (i < limit - 1)
+          sb.append("|");
+      }
+      builder.queryParam("waypoints", sb.toString());
+    }
+
+    try {
+      JsonNode response = restTemplate.getForObject(builder.build().encode().toUriString(), JsonNode.class);
+      if (response != null && "OK".equals(response.path("status").asText())) {
+        return response.path("routes").get(0).path("overview_polyline").path("points").asText();
+      }
+    } catch (Exception e) {
+      log.error("Error in Directions API: {}", e.getMessage());
+    }
+    return null;
   }
 
   @Override

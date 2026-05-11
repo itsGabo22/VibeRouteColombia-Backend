@@ -3,19 +3,18 @@ package com.routeoptimizer.controller;
 import com.routeoptimizer.dto.AuthenticationResponse;
 import com.routeoptimizer.dto.LoginRequest;
 import com.routeoptimizer.dto.RegisterRequest;
+import com.routeoptimizer.dto.PasswordResetRequest;
 import com.routeoptimizer.service.AuthService;
 
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 /**
  * Controlador para gestionar el registro y la autenticación de usuarios.
  */
+@CrossOrigin(origins = "*")
 @RestController
-@RequestMapping("/api/v1/auth")
+@RequestMapping({"/api/v1/auth", "/auth"})
 public class AuthController {
 
   private final AuthService authService;
@@ -28,7 +27,7 @@ public class AuthController {
    * Endpoint para registrar un nuevo usuario en el sistema.
    */
   @PostMapping("/register")
-  public ResponseEntity<AuthenticationResponse> register(@RequestBody RegisterRequest request) {
+  public ResponseEntity<AuthenticationResponse> register(@jakarta.validation.Valid @RequestBody RegisterRequest request) {
     return ResponseEntity.ok(authService.register(request));
   }
 
@@ -38,5 +37,14 @@ public class AuthController {
   @PostMapping("/login")
   public ResponseEntity<AuthenticationResponse> login(@RequestBody LoginRequest request) {
     return ResponseEntity.ok(authService.login(request));
+  }
+
+  /**
+   * Endpoint para restablecer la contraseña validando el correo y el número de teléfono.
+   */
+  @PostMapping("/reset-password")
+  public ResponseEntity<java.util.Map<String, String>> resetPassword(@jakarta.validation.Valid @RequestBody PasswordResetRequest request) {
+    authService.resetPassword(request);
+    return ResponseEntity.ok(java.util.Map.of("message", "Contraseña restablecida con éxito"));
   }
 }

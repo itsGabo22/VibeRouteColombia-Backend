@@ -4,7 +4,9 @@ import com.routeoptimizer.model.Coordinate;
 import com.routeoptimizer.model.enums.Priority;
 
 import java.time.LocalTime;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class OrderCreateDTO {
 
   private String address;
@@ -14,6 +16,7 @@ public class OrderCreateDTO {
   private LocalTime timeWindowStart;
   private LocalTime timeWindowEnd;
   private String clientReference;
+  private String clientName;
   private java.math.BigDecimal price;
 
   // Getters and Setters
@@ -23,6 +26,14 @@ public class OrderCreateDTO {
 
   public void setAddress(String address) {
     this.address = address;
+  }
+
+  public String getClientName() {
+    return clientName;
+  }
+
+  public void setClientName(String clientName) {
+    this.clientName = clientName;
   }
 
   public String getCity() {

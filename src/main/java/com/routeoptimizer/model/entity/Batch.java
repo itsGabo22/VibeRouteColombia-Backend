@@ -23,8 +23,12 @@ public class Batch {
     @Column(nullable = false)
     private String status; // OPEN, ASSIGNED, FULL_UNASSIGNED
 
+    @Column(name = "city")
+    private String city;
+
     @OneToMany
     @JoinColumn(name = "batch_id", insertable = false, updatable = false)
+    @OrderBy("deliveryOrder ASC")
     private List<Order> orders = new ArrayList<>();
 
     @ManyToOne
@@ -33,6 +37,14 @@ public class Batch {
 
     @Column(name = "manifest_url")
     private String manifestUrl;
+
+    /**
+     * AI-generated copilot tips stored as a JSON array string.
+     * Generated once at driver assignment time (Cache/Memento Pattern)
+     * to avoid repeated Gemini API calls during delivery.
+     */
+    @Column(name = "ai_copilot_tips", columnDefinition = "TEXT")
+    private String aiCopilotTips;
 
     public Batch() {
         this.creationDate = LocalDate.now();
@@ -93,5 +105,21 @@ public class Batch {
 
     public void setManifestUrl(String manifestUrl) {
         this.manifestUrl = manifestUrl;
+    }
+
+    public String getCity() {
+        return city;
+    }
+
+    public void setCity(String city) {
+        this.city = city;
+    }
+
+    public String getAiCopilotTips() {
+        return aiCopilotTips;
+    }
+
+    public void setAiCopilotTips(String aiCopilotTips) {
+        this.aiCopilotTips = aiCopilotTips;
     }
 }

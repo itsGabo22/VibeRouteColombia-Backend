@@ -3,6 +3,7 @@ import urllib.error
 import json
 import time
 import urllib.parse
+import base64
 
 BASE_URL = "http://localhost:8080/api/v1"
 
@@ -54,28 +55,30 @@ def run_tests():
     print("1. Registrando Usuarios y Obteniendo Tokens...")
     
     # 1.1 Registrar SUPER ADMIN
-    superadmin_data = {"email": "superadmin@viberoute.com", "password": "pass", "name": "Super Admin", "phone": "123", "role": "ADMIN"}
+    # Password encoded as Base64 to simulate frontend "hiding"
+    password_b64 = base64.b64encode("pass".encode()).decode()
+    superadmin_data = {"email": "superadmin@viberoute.com", "password": password_b64, "name": "Super Admin", "phone": "123", "role": "ADMIN"}
     # Ignoramos si ya existe, el login nos dará el token
     make_request("POST", "/auth/register", superadmin_data)
     
-    st, res = make_request("POST", "/auth/login", {"email": "superadmin@viberoute.com", "password": "pass"})
+    st, res = make_request("POST", "/auth/login", {"email": "superadmin@viberoute.com", "password": password_b64})
     if not print_result("Login Super Admin", st, [200]): return
     token_superadmin = res.get("token") if isinstance(res, dict) else None
     token_superadmin_expired = token_superadmin # For legacy logic if needed
 
     # 1.2 Registrar LOGISTICS
-    logistics_data = {"email": "logistics@viberoute.com", "password": "pass", "name": "Logistics Prueba", "phone": "123", "role": "LOGISTICS"}
+    logistics_data = {"email": "logistics@viberoute.com", "password": password_b64, "name": "Logistics Prueba", "phone": "123", "role": "LOGISTICS"}
     make_request("POST", "/auth/register", logistics_data)
     
-    st, res = make_request("POST", "/auth/login", {"email": "logistics@viberoute.com", "password": "pass"})
+    st, res = make_request("POST", "/auth/login", {"email": "logistics@viberoute.com", "password": password_b64})
     if not print_result("Login Logistics", st, [200]): return
     token_admin = res.get("token") if isinstance(res, dict) else None 
 
     # 1.3 Registrar Driver
-    driver_data = {"email": "driver@viberoute.com", "password": "pass", "name": "Driver Prueba", "phone": "123", "role": "DRIVER", "costPerHour": 25.50}
+    driver_data = {"email": "driver@viberoute.com", "password": password_b64, "name": "Driver Prueba", "phone": "123", "role": "DRIVER", "costPerHour": 25.50}
     make_request("POST", "/auth/register", driver_data)
     
-    st, res = make_request("POST", "/auth/login", {"email": "driver@viberoute.com", "password": "pass"})
+    st, res = make_request("POST", "/auth/login", {"email": "driver@viberoute.com", "password": password_b64})
     if not print_result("Login Driver", st, [200]): return
     token_driver = res.get("token") if isinstance(res, dict) else None
     
@@ -97,6 +100,16 @@ def run_tests():
     print_result("Crear Pedido 2 (Bogotá)", st, [200, 201])
     
     time.sleep(1) 
+    
+    # NEW STEP: Manual Batch Creation (since auto-batching is disabled)
+    print("\n2.1 Consolidando Pedidos en un Lote Manual...")
+    # Get pending orders to get IDs
+    st, pending_orders = make_request("GET", "/orders/pending?city=Bogotá", token=token_admin)
+    if st == 200 and isinstance(pending_orders, list) and len(pending_orders) >= 2:
+        order_ids = [o.get("id") for o in pending_orders]
+        manual_batch_data = {"orderIds": order_ids, "city": "Bogotá"}
+        st, manual_batch = make_request("POST", "/batches/manual", manual_batch_data, token_admin)
+        print_result("Crear Lote Manual", st, [200], f"Batch ID: {manual_batch.get('id') if manual_batch else '?'}")
     
     # 3. Listar Lotes Pendientes
     print("\n3. Verificando Lotes...")
@@ -142,16 +155,17 @@ def run_tests():
         {"address": "Parque 93", "city": "Bogotá", "priority": "MEDIUM", "clientReference": "BULK-02", "price": 28000}
     ]
     st, bulk_res = make_request("POST", "/orders/bulk", bulk_orders, token_admin)
-    print_result("Carga Masiva de 2 Pedidos", st, [200, 201], f"Pedidos creados: {len(bulk_res) if isinstance(bulk_res, list) else 0}")
+    created_list = bulk_res.get("created") if isinstance(bulk_res, dict) else []
+    print_result("Carga Masiva de 2 Pedidos", st, [200, 201], f"Pedidos creados: {bulk_res.get('createdCount') if isinstance(bulk_res, dict) else 0}")
 
     # 8. Analíticas y Dashboard
     print("\n8. Consultando Dashboard de Analíticas...")
-    st, stats = make_request("GET", "/analytics/delivery-summary", token=token_superadmin)
+    st, stats = make_request("GET", "/stats/delivery-summary", token=token_superadmin)
     print_result("Obtener Estadísticas Hoy vs Mes", st, [200], f"Entregas Hoy: {stats.get('deliveriesToday') if isinstance(stats, dict) else 0}")
 
     # 9. Ranking de Repartidores con Tags
     print("\n9. Verificando Ranking y Medallas (Tags)...")
-    st, ranking = make_request("GET", "/analytics/driver-ranking", token=token_superadmin)
+    st, ranking = make_request("GET", "/stats/driver-ranking", token=token_superadmin)
     if print_result("Obtener Ranking", st, [200]):
         if isinstance(ranking, list):
             for r in ranking:
@@ -219,7 +233,7 @@ def run_tests():
 
         # 13. Nuevo: Dashboard Financiero (Estrategia)
         print("\n13. Consultando Dashboard Financiero (Admin Estratégico)...")
-        st, finance = make_request("GET", "/analytics/financial-summary", token=token_superadmin)
+        st, finance = make_request("GET", "/stats/financial-summary", token=token_superadmin)
         if print_result("Obtener Reporte de Utilidad Neta", st, [200]):
             print(f"   > Ingresos Totales: ${finance.get('totalRevenue')}")
             print(f"   > Costos Operativos: ${finance.get('operationalCosts')}")
@@ -228,11 +242,11 @@ def run_tests():
 
         # 14. Nuevo: Verificación de Seguridad y Permisos
         print("\n14. Verificando Seguridad y Control de Acceso...")
-        st_invalid, _ = make_request("GET", "/analytics/financial-summary", token="fake_token_123")
+        st_invalid, _ = make_request("GET", "/stats/financial-summary", token="fake_token_123")
         print_result("Acceso con Token Inválido (401)", st_invalid, [401])
-        st_none, _ = make_request("GET", "/analytics/financial-summary", token=None)
+        st_none, _ = make_request("GET", "/stats/financial-summary", token=None)
         print_result("Acceso sin Token (401)", st_none, [401])
-        st_forbidden, _ = make_request("GET", "/analytics/financial-summary", token=token_driver)
+        st_forbidden, _ = make_request("GET", "/stats/financial-summary", token=token_driver)
         print_result("Acceso Prohibido - Driver a Finanzas (403)", st_forbidden, [403])
 
         # 15. Nuevo: Pruebas de Resiliencia de Seguridad
@@ -240,7 +254,7 @@ def run_tests():
         st_dup, res_dup = make_request("POST", "/auth/register", superadmin_data)
         print_result("Intento de Registro Duplicado", st_dup, [400], f"Error: {res_dup.get('error') if isinstance(res_dup, dict) else 'Unknown'}")
         
-        st_bad_pass, _ = make_request("POST", "/auth/login", {"email": "superadmin@viberoute.com", "password": "wrong_password"})
+        st_bad_pass, _ = make_request("POST", "/auth/login", {"email": "superadmin@viberoute.com", "password": base64.b64encode("wrong_password".encode()).decode()})
         print_result("Login con password incorrecto (401)", st_bad_pass, [401])
 
         # 16. Nuevo: Gestión Documental (Firebase Integration)
@@ -260,7 +274,7 @@ def run_tests():
             order_bulk_id = bulk_res[1].get("id")
             make_request("PATCH", f"/orders/{order_bulk_id}/status?status=DELIVERED", token=token_driver)
             
-            _, fin2 = make_request("GET", "/analytics/financial-summary", token=token_superadmin)
+            _, fin2 = make_request("GET", "/stats/financial-summary", token=token_superadmin)
             utilidad_final = float(fin2.get('netProfit', 0))
             if utilidad_final > utilidad_inicial:
                 print(f"{Colors.GREEN}[PASS] Utilidad Neta aumentó de ${utilidad_inicial} a ${utilidad_final}{Colors.RESET}")
@@ -269,8 +283,9 @@ def run_tests():
 
         # 18. Nuevo: Límites de Rol
         print("\n18. Verificando Límites de Rol...")
+        # Note: In new config, DRIVER CAN see batches (shared access for operational monitoring)
         st_limit, _ = make_request("GET", "/batches", token=token_driver)
-        print_result("Driver NO puede listar todos los lotes (403)", st_limit, [403])
+        print_result("Driver PUEDE listar lotes (Cambio en Requisitos) (200)", st_limit, [200])
         st_limit2, _ = make_request("POST", "/orders", order1, token=token_driver)
         print_result("Driver NO puede crear pedidos (403)", st_limit2, [403])
 

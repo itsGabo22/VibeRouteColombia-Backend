@@ -19,9 +19,12 @@ public class OrderResponseDTO {
   private LocalTime timeWindowStart;
   private LocalTime timeWindowEnd;
   private String clientReference;
+  private String clientName;
   private String city;
   private String nonDeliveryReason;
   private java.math.BigDecimal price;
+  private Long batchId;
+  private String driverName;
 
   public static OrderResponseDTO fromEntity(Order order) {
     if (order == null)
@@ -37,9 +40,11 @@ public class OrderResponseDTO {
     dto.setTimeWindowStart(order.getTimeWindowStart());
     dto.setTimeWindowEnd(order.getTimeWindowEnd());
     dto.setClientReference(order.getClientReference());
+    dto.setClientName(order.getClientName());
     dto.setCity(order.getCity());
     dto.setNonDeliveryReason(order.getNonDeliveryReason());
     dto.setPrice(order.getPrice());
+    dto.setBatchId(order.getBatchId());
     return dto;
   }
 
@@ -115,6 +120,14 @@ public class OrderResponseDTO {
     this.clientReference = clientReference;
   }
 
+  public String getClientName() {
+    return clientName;
+  }
+
+  public void setClientName(String clientName) {
+    this.clientName = clientName;
+  }
+
   public String getCity() {
     return city;
   }
@@ -137,5 +150,21 @@ public class OrderResponseDTO {
 
   public void setPrice(java.math.BigDecimal price) {
     this.price = price;
+  }
+
+  public Long getBatchId() {
+    return batchId;
+  }
+
+  public void setBatchId(Long batchId) {
+    this.batchId = batchId;
+  }
+
+  public String getDriverName() {
+    return driverName;
+  }
+
+  public void setDriverName(String driverName) {
+    this.driverName = driverName;
   }
 }

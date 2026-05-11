@@ -8,7 +8,6 @@ import com.routeoptimizer.model.entity.Batch;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
-
 import java.util.UUID;
 
 @Repository
@@ -17,7 +16,9 @@ public interface BatchRepository extends JpaRepository<Batch, Long> {
 
     List<Batch> findByCreationDate(LocalDate date);
 
-    Optional<Batch> findFirstByStatusOrderByCreationDateAsc(String status);
+    Optional<Batch> findFirstByStatusAndCityOrderByCreationDateAsc(String status, String city);
+
+    List<Batch> findByCityAndDriverIsNullOrderByCreationDateAsc(String city);
 
     List<Batch> findByDriverIsNullOrderByCreationDateAsc();
 

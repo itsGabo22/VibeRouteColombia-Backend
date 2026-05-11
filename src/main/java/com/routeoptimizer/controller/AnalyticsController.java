@@ -5,17 +5,16 @@ import com.routeoptimizer.dto.DriverRankingDTO;
 import com.routeoptimizer.service.AnalyticsService;
 
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
 /**
  * Controlador para exponer las métricas y analíticas del sistema.
  */
+@CrossOrigin(origins = "*")
 @RestController
-@RequestMapping("/api/v1/analytics")
+@RequestMapping({"/api/v1/stats", "/stats"})
 public class AnalyticsController {
 
     private final AnalyticsService analyticsService;
@@ -44,7 +43,8 @@ public class AnalyticsController {
      * Gets the financial profitability summary (Revenue, Costs, Profit).
      */
     @GetMapping("/financial-summary")
-    public ResponseEntity<com.routeoptimizer.dto.FinancialAnalyticsDTO> getFinancialSummary() {
-        return ResponseEntity.ok(analyticsService.getFinancialAnalytics());
+    public ResponseEntity<com.routeoptimizer.dto.FinancialAnalyticsDTO> getFinancialSummary(
+            @org.springframework.web.bind.annotation.RequestParam(required = false) String city) {
+        return ResponseEntity.ok(analyticsService.getFinancialAnalytics(city));
     }
 }

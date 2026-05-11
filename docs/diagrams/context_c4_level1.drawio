@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Placeholder: diagrama de contexto C4 Level 1 -->
+<!-- Abrir con draw.io (https://app.diagrams.net/) y diseñar el diagrama -->
+<!-- Actores: Administrador, Repartidor -->
+<!-- Sistema: Route Optimizer Colombia -->
+<!-- Sistemas externos: Google Maps API, PostgreSQL + PostGIS, Redis -->
+<mxfile>
+  <diagram name="C4 Context - Level 1">
+    <mxGraphModel>
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

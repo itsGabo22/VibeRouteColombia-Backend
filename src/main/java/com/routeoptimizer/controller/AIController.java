@@ -18,8 +18,9 @@ import java.util.Map;
  * Refactored to remove business logic and use typed DTOs, as per professor
  * requirements.
  */
+@CrossOrigin(origins = "*")
 @RestController
-@RequestMapping("/api/v1/ai")
+@RequestMapping({"/api/v1/ai", "/ai"})
 public class AIController {
 
   private final AIRouteSuggestionService aiRouteSuggestionService;
@@ -59,6 +60,9 @@ public class AIController {
     String summary = contextualAdvisor.generateDailySummary(
         request.getTotalDelivered(),
         request.getTotalPending(),
+        request.getTotalCancelled(),
+        request.getTotalReturned(),
+        request.getEfficiencyScore(),
         request.getTotalHours(),
         request.getCity());
 

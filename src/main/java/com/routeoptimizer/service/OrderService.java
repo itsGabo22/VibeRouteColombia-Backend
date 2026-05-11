@@ -1,9 +1,11 @@
 package com.routeoptimizer.service;
 
 import com.routeoptimizer.dto.OrderCreateDTO;
+import com.routeoptimizer.dto.OrderResponseDTO;
 import com.routeoptimizer.model.Coordinate;
 import com.routeoptimizer.model.entity.Order;
 import com.routeoptimizer.model.enums.OrderStatus;
+import com.routeoptimizer.model.enums.Priority;
 import com.routeoptimizer.repository.OrderRepository;
 
 import org.springframework.context.annotation.Lazy;
@@ -41,10 +43,11 @@ public class OrderService {
   public Order createOrder(OrderCreateDTO dto) {
     Order order = new Order();
     order.setAddress(dto.getAddress());
-    order.setPriority(dto.getPriority());
+    order.setPriority(dto.getPriority() != null ? dto.getPriority() : Priority.MEDIUM);
     order.setTimeWindowStart(dto.getTimeWindowStart());
     order.setTimeWindowEnd(dto.getTimeWindowEnd());
     order.setClientReference(dto.getClientReference());
+    order.setClientName(dto.getClientName());
     order.setPrice(dto.getPrice());
 
     order.setStatus(OrderStatus.PENDING);
@@ -63,18 +66,17 @@ public class OrderService {
     }
 
     order.setLocation(coord);
-    order.setCity(dto.getCity());
+    order.setCity(dto.getCity() != null ? dto.getCity().trim() : "Bogotá");
 
     Order savedOrder = orderRepository.save(order);
-
-    batchService.addOrderToActiveBatch(savedOrder);
-
+    // batchService.addOrderToActiveBatch(savedOrder); // Deshabilitado para
+    // permitir consolidación manual por Logística
     return savedOrder;
   }
 
   @Transactional(readOnly = true)
   public List<Order> findAll() {
-    return orderRepository.findAll();
+    return orderRepository.findAllWithDriver();
   }
 
   @Transactional(readOnly = true)
@@ -85,7 +87,10 @@ public class OrderService {
   }
 
   @Transactional(readOnly = true)
-  public List<Order> findPendingWithoutBatch() {
+  public List<Order> findPendingWithoutBatch(String city) {
+    if (city != null && !city.isEmpty()) {
+      return orderRepository.findByBatchIdIsNullAndCity(city);
+    }
     return orderRepository.findByBatchIdIsNull();
   }
 
@@ -93,19 +98,34 @@ public class OrderService {
   @SuppressWarnings("null")
   public Order updateStatus(Long id, OrderStatus newStatus, String reason) {
     Order order = findById(id);
-    order.setStatus(newStatus);
 
-    if (newStatus == OrderStatus.CANCELLED || newStatus == OrderStatus.RETURNED) {
-      if (reason != null) {
-        order.setNonDeliveryReason(reason);
-      }
-    } else {
-      order.setNonDeliveryReason(null);
-    }
+    // Patrón State: Delegamos la transición al estado actual
+    order.getStateObject().transitionTo(order, newStatus, reason);
 
     Order savedOrder = orderRepository.save(order);
 
-    messagingTemplate.convertAndSend("/topic/logistica", Map.of(
+    if (order.getBatchId() != null && 
+        (newStatus == OrderStatus.DELIVERED || newStatus == OrderStatus.RETURNED || newStatus == OrderStatus.CANCELLED)) {
+        
+        // Actualizar estadísticas del repartidor
+        try {
+            com.routeoptimizer.model.entity.Batch batch = batchService.findById(order.getBatchId());
+            if (batch != null && batch.getDriver() != null) {
+                com.routeoptimizer.model.entity.Driver driver = batch.getDriver();
+                if (newStatus == OrderStatus.DELIVERED) {
+                    driver.setCompletedOrders((driver.getCompletedOrders() != null ? driver.getCompletedOrders() : 0) + 1);
+                } else {
+                    driver.setFailedOrders((driver.getFailedOrders() != null ? driver.getFailedOrders() : 0) + 1);
+                }
+            }
+        } catch (Exception e) {
+            // Ignorar errores de estadísticas para no bloquear la transición
+        }
+        
+        batchService.checkAndCompleteBatch(order.getBatchId());
+    }
+
+    messagingTemplate.convertAndSend("/topic/logistics", Map.of(
         "orderId", savedOrder.getId(),
         "newStatus", savedOrder.getStatus(),
         "city", savedOrder.getCity(),
@@ -125,9 +145,51 @@ public class OrderService {
   }
 
   @Transactional
-  public List<Order> createOrdersBulk(List<OrderCreateDTO> dtos) {
-    return dtos.stream()
-        .map(this::createOrder)
-        .collect(Collectors.toList());
+  public Map<String, Object> createOrdersBulk(List<OrderCreateDTO> dtos) {
+    List<Order> created = new java.util.ArrayList<>();
+    List<Map<String, String>> errors = new java.util.ArrayList<>();
+
+    for (int i = 0; i < dtos.size(); i++) {
+      OrderCreateDTO dto = dtos.get(i);
+      try {
+        created.add(createOrder(dto));
+      } catch (RuntimeException e) {
+        String ref = dto.getClientReference() != null ? dto.getClientReference() : "index-" + i;
+        errors.add(Map.of("reference", ref, "error", e.getMessage()));
+      }
+    }
+
+    return Map.of(
+        "created", created,
+        "createdCount", created.size(),
+        "errorCount", errors.size(),
+        "errors", errors);
+  }
+
+  @Transactional(readOnly = true)
+  public OrderResponseDTO enrichOrderResponse(Order order) {
+    OrderResponseDTO dto = OrderResponseDTO.fromEntity(order);
+    // Nota: El driverName ya se puede poblar desde el JOIN del repositorio si se mapea correctamente,
+    // o podemos mantener esta lógica pero sabiendo que findAll() ya trajo los objetos Batch en memoria.
+    if (order.getBatchId() != null && dto.getDriverName() == null) {
+      try {
+        com.routeoptimizer.model.entity.Batch batch = batchService.findById(order.getBatchId());
+        if (batch != null && batch.getDriver() != null) {
+          dto.setDriverName(batch.getDriver().getName());
+        }
+      } catch (Exception e) {}
+    }
+    return dto;
+  }
+
+  @Transactional
+  public void deleteOrder(Long id) {
+    Order order = findById(id);
+    // Si el pedido tiene un lote, avisar o desvincular
+    if (order.getBatchId() != null) {
+      // Opcional: loguear que se eliminó un pedido asignado
+    }
+    orderRepository.delete(order);
   }
 }
+

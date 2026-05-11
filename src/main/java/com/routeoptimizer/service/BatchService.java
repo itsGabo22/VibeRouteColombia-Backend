@@ -17,6 +17,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import com.routeoptimizer.model.enums.OrderStatus;
+
 @Service
 public class BatchService {
 
@@ -28,33 +30,38 @@ public class BatchService {
     private final DriverRepository driverRepository;
     private final RouteService routeService;
     private final AIRouteSuggestionService aiService;
+    private final ContextualAdvisor contextualAdvisor;
 
     public BatchService(BatchRepository batchRepository,
             OrderRepository orderRepository,
             DriverRepository driverRepository,
             RouteService routeService,
-            AIRouteSuggestionService aiService) {
+            AIRouteSuggestionService aiService,
+            ContextualAdvisor contextualAdvisor) {
         this.batchRepository = batchRepository;
         this.orderRepository = orderRepository;
         this.driverRepository = driverRepository;
         this.routeService = routeService;
         this.aiService = aiService;
+        this.contextualAdvisor = contextualAdvisor;
     }
 
     @Transactional
     public void addOrderToActiveBatch(Order order) {
-        Optional<Batch> openBatch = batchRepository.findFirstByStatusOrderByCreationDateAsc("OPEN");
+        String city = order.getCity() != null ? order.getCity() : "Global";
+        Optional<Batch> openBatch = batchRepository.findFirstByStatusAndCityOrderByCreationDateAsc("OPEN", city);
 
         Batch batch;
         if (openBatch.isPresent()) {
             batch = openBatch.get();
-            log.info("Order #{} added to existing batch #{} ({}/{} orders)",
-                    order.getId(), batch.getId(), batch.getOrders().size() + 1, MAX_ORDERS_PER_BATCH);
+            log.info("Order #{} added to existing batch #{} for city {} ({}/{} orders)",
+                    order.getId(), batch.getId(), city, batch.getOrders().size() + 1, MAX_ORDERS_PER_BATCH);
         } else {
             batch = new Batch();
             batch.setStatus("OPEN");
+            batch.setCity(city);
             batch = batchRepository.save(batch);
-            log.info("New batch #{} created for order #{}", batch.getId(), order.getId());
+            log.info("New batch #{} created for city {} with order #{}", batch.getId(), city, order.getId());
         }
 
         order.setBatchId(batch.getId());
@@ -81,9 +88,21 @@ public class BatchService {
         Driver driver = available.get(0);
         batch.setDriver(driver);
         batch.setStatus("ASSIGNED");
+
+        // Actualizar el estado del conductor a EN RUTA
+        driver.setStatus(DriverStatus.ON_ROUTE);
+        driverRepository.save(driver);
+
+        // Sincronizar pedidos
+        batch.getOrders().forEach(o -> {
+            o.setStatus(OrderStatus.ON_ROUTE);
+            orderRepository.save(o);
+        });
+
         batchRepository.save(batch);
 
         executeAIAnalysis(batch);
+        generateCopilotTips(batch, driver);
 
         try {
             routeService.optimizeAndSaveRoute(batch.getId());
@@ -97,7 +116,8 @@ public class BatchService {
 
     @Transactional
     public boolean assignAvailableDriverToOldestPendingBatch(Driver driver) {
-        List<Batch> pendingBatches = batchRepository.findByDriverIsNullOrderByCreationDateAsc();
+        String city = (driver.getAssignedCity() != null) ? driver.getAssignedCity() : "Global";
+        List<Batch> pendingBatches = batchRepository.findByCityAndDriverIsNullOrderByCreationDateAsc(city);
 
         if (pendingBatches.isEmpty()) {
             log.debug("No batches without driver to assign to '{}'", driver.getName());
@@ -107,9 +127,23 @@ public class BatchService {
         Batch batch = pendingBatches.get(0);
         batch.setDriver(driver);
         batch.setStatus("ASSIGNED");
+
+        // Actualizar el estado del conductor a EN RUTA
+        driver.setStatus(DriverStatus.ON_ROUTE);
+        driverRepository.save(driver);
+
+        // Sincronizar pedidos
+        batch.getOrders().forEach(o -> {
+            o.setStatus(OrderStatus.ON_ROUTE);
+            orderRepository.save(o);
+        });
+
         batchRepository.save(batch);
 
+        log.info("Batch #{} assigned to driver #{} ({})", batch.getId(), driver.getId(), driver.getName());
+
         executeAIAnalysis(batch);
+        generateCopilotTips(batch, driver);
 
         try {
             routeService.optimizeAndSaveRoute(batch.getId());
@@ -117,23 +151,95 @@ public class BatchService {
             log.error("Error generating automatic route for batch #{}: {}", batch.getId(), e.getMessage());
         }
 
-        log.info("Driver '{}' automatically assigned to batch #{} ({} orders)",
-                driver.getName(), batch.getId(), batch.getOrders().size());
         return true;
+    }
+
+    @Transactional
+    public Batch createManualBatch(List<Long> orderIds, String city) {
+        if (orderIds == null || orderIds.isEmpty()) {
+            throw new RuntimeException("Debe seleccionar al menos un pedido para crear un lote.");
+        }
+
+        Batch batch = new Batch();
+        batch.setStatus("OPEN");
+        batch.setCity(city != null ? city : "Global");
+        batch = batchRepository.save(batch);
+
+        for (Long orderId : orderIds) {
+            Order order = orderRepository.findById(orderId)
+                    .orElseThrow(() -> new RuntimeException("Order no encontrado: " + orderId));
+            
+            // Validar que el pedido pertenezca a la misma ciudad que el lote (solo si hay una ciudad específica definida)
+            boolean isGlobalBatch = batch.getCity() == null || batch.getCity().trim().isEmpty() || batch.getCity().equalsIgnoreCase("Global");
+            if (!isGlobalBatch && !order.getCity().equalsIgnoreCase(batch.getCity())) {
+                throw new RuntimeException("El pedido #" + orderId + " (" + order.getCity() + ") no pertenece a la ciudad del lote (" + batch.getCity() + ")");
+            }
+            
+            order.setBatchId(batch.getId());
+            orderRepository.save(order);
+        }
+
+        log.info("Lote manual #{} creado con {} pedidos para {}", batch.getId(), orderIds.size(), city);
+        return batch;
+    }
+
+    @Transactional
+    public Batch assignDriverToBatch(Long batchId, Long driverId) {
+        Batch batch = findById(batchId);
+        Driver driver = driverRepository.findById(driverId)
+                .orElseThrow(() -> new RuntimeException("Driver not found with ID: " + driverId));
+        
+        batch.setDriver(driver);
+        batch.setStatus("ASSIGNED");
+
+        // Cambiar el estado del conductor a En Ruta
+        driver.setStatus(DriverStatus.ON_ROUTE);
+        driverRepository.save(driver);
+
+        // Sincronizar pedidos
+        batch.getOrders().forEach(o -> {
+            o.setStatus(OrderStatus.ON_ROUTE);
+            orderRepository.save(o);
+        });
+
+        batch = batchRepository.save(batch);
+
+        executeAIAnalysis(batch);
+        generateCopilotTips(batch, driver);
+
+        try {
+            routeService.optimizeAndSaveRoute(batch.getId());
+        } catch (Exception e) {
+            log.error("Error generating automatic route for batch #{}: {}", batch.getId(), e.getMessage());
+        }
+
+        return batch;
     }
 
     private void executeAIAnalysis(Batch batch) {
         try {
-            // Note: need to make sure aiService accepts Batch if we renamed Lote to Batch
-            // We use standard Object passing for now if methods are broken, or we will fix
-            // AI service
             Map<String, Object> sugerencias = aiService.sugerirOptimizacion(batch);
-            log.info("🤖 IA para Batch #{}: {}", batch.getId(), sugerencias.get("recomendacion"));
+            log.info("🤖 IA para Batch #{}: {}", batch.getId(), sugerencias.get("aiRecommendation"));
             log.info("   Tráfico: {}, Pedidos prioritarios: {}",
                     sugerencias.get("trafficInsights"),
-                    sugerencias.get("pedidosPrioritariosSugeridos"));
+                    sugerencias.get("urgentOrdersCount"));
         } catch (Exception e) {
             log.warn("Could not get AI suggestions for batch #{}: {}", batch.getId(), e.getMessage());
+        }
+    }
+
+    /**
+     * Generates AI copilot tips for the driver via a single Gemini call.
+     * Tips are persisted in the Batch entity (Observer Pattern: assignment triggers generation).
+     */
+    private void generateCopilotTips(Batch batch, Driver driver) {
+        try {
+            String copilotTips = contextualAdvisor.generateBatchCopilotTips(batch, driver.getName());
+            batch.setAiCopilotTips(copilotTips);
+            batchRepository.save(batch);
+            log.info("🧠 Copilot tips generated for batch #{} (driver: {})", batch.getId(), driver.getName());
+        } catch (Exception e) {
+            log.warn("Could not generate copilot tips for batch #{}: {}", batch.getId(), e.getMessage());
         }
     }
 
@@ -162,16 +268,52 @@ public class BatchService {
     }
 
     @Transactional(readOnly = true)
-    public List<Batch> getPendingBatches() {
-        return batchRepository.findByDriverIsNullOrderByCreationDateAsc();
+    public List<Batch> getPendingBatches(String city) {
+        if (city != null && !city.isEmpty()) {
+            return batchRepository.findByCityAndDriverIsNullOrderByCreationDateAsc(city);
+        }
+        return batchRepository.findAll().stream().filter(b -> b.getDriver() == null).toList();
     }
 
     @Transactional(readOnly = true)
     public Optional<Batch> findActiveBatchByDriverName(String driverName) {
         return batchRepository.findAll().stream()
                 .filter(b -> b.getDriver() != null && b.getDriver().getName().equalsIgnoreCase(driverName))
-                .filter(b -> !"COMPLETED".equals(b.getStatus()))
+                .filter(b -> !"COMPLETED".equals(b.getStatus()) && !"CANCELLED".equals(b.getStatus()))
                 .findFirst();
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<Batch> findActiveBatchByDriverId(Long driverId) {
+        return batchRepository.findAll().stream()
+                .filter(b -> b.getDriver() != null && b.getDriver().getId().equals(driverId))
+                .filter(b -> !"COMPLETED".equals(b.getStatus()) && !"CANCELLED".equals(b.getStatus()))
+                .findFirst();
+    }
+
+
+    @Transactional
+    public void checkAndCompleteBatch(Long batchId) {
+        Batch batch = findById(batchId);
+        if ("COMPLETED".equals(batch.getStatus())) {
+            return;
+        }
+
+        boolean allTerminal = batch.getOrders().stream().allMatch(o ->
+                o.getStatus() == OrderStatus.DELIVERED ||
+                o.getStatus() == OrderStatus.RETURNED ||
+                o.getStatus() == OrderStatus.CANCELLED);
+
+        if (allTerminal && !batch.getOrders().isEmpty()) {
+            batch.setStatus("COMPLETED");
+            Driver driver = batch.getDriver();
+            if (driver != null) {
+                driver.setStatus(DriverStatus.AVAILABLE);
+                driverRepository.save(driver);
+            }
+            batchRepository.save(batch);
+            log.info("Lote #{} completado automáticamente. Conductor {} está ahora AVAILABLE.", batchId, driver != null ? driver.getName() : "N/A");
+        }
     }
 
     @Transactional

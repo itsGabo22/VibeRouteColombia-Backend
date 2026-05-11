@@ -25,4 +25,8 @@ INSERT INTO coverage_zones (name, city, geom) VALUES
 ('Cali Urbana', 'Cali', ST_GeomFromText(
   'POLYGON((-76.60 3.34, -76.60 3.50, -76.47 3.50, -76.47 3.34, -76.60 3.34))', 
   4326
+)),
+('Pasto Urbana', 'Pasto', ST_GeomFromText(
+  'POLYGON((-77.34 1.18, -77.34 1.25, -77.24 1.25, -77.24 1.18, -77.34 1.18))', 
+  4326
 ));

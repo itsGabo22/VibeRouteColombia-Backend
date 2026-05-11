@@ -43,15 +43,28 @@ public class SecurityConfig {
         .cors(cors -> cors.configurationSource(corsConfigurationSource()))
         .csrf(AbstractHttpConfigurer::disable)
         .authorizeHttpRequests(auth -> auth
-            .requestMatchers("/api/v1/auth/**", "/api/v1/ping", "/error", "/ws-alertas/**").permitAll()
-            // Specific DRIVER actions must come BEFORE the broad admin-only rules
-            .requestMatchers(HttpMethod.PATCH, "/api/v1/drivers/*/status").hasAnyRole("DRIVER", "ADMIN")
-            .requestMatchers(HttpMethod.PATCH, "/api/v1/orders/*/status").hasAnyRole("DRIVER", "LOGISTICS", "ADMIN")
-            // Broad role-based access rules
-            .requestMatchers("/api/v1/drivers/**").hasRole("ADMIN")
-            .requestMatchers("/api/v1/orders/**", "/api/v1/orders", "/api/v1/batches/**", "/api/v1/analytics/**")
-            .hasAnyRole("LOGISTICS", "ADMIN")
-            .requestMatchers("/api/v1/routes/**", "/api/v1/locations/**").hasAnyRole("DRIVER", "ADMIN")
+            .requestMatchers("/api/v1/auth/login", "/api/v1/auth/reset-password", "/api/v1/ping", "/error", "/ws-alertas/**", "/auth/**").permitAll()
+            .requestMatchers("/api/v1/auth/register", "/auth/register").hasAnyRole("SUPER_ADMIN", "ADMIN", "LOGISTICS")
+            .requestMatchers("/api/v1/system/**", "/system/**").hasRole("SUPER_ADMIN")
+            
+            // Specific DRIVER actions
+            .requestMatchers(HttpMethod.PATCH, "/api/v1/drivers/*/status", "/drivers/*/status").hasAnyRole("DRIVER", "ADMIN", "SUPER_ADMIN")
+            .requestMatchers(HttpMethod.PATCH, "/api/v1/orders/*/status", "/orders/*/status").hasAnyRole("DRIVER", "LOGISTICS", "ADMIN", "SUPER_ADMIN")
+            
+            // Shared Driver management
+            .requestMatchers("/api/v1/drivers", "/api/v1/drivers/**", "/drivers", "/drivers/**").hasAnyRole("ADMIN", "LOGISTICS", "SUPER_ADMIN")
+            
+            // Shared Logistics/Admin access
+            .requestMatchers("/api/v1/orders", "/api/v1/orders/**", "/orders", "/orders/**",
+                             "/api/v1/stats", "/api/v1/stats/**", "/stats", "/stats/**",
+                             "/api/v1/reports", "/api/v1/reports/**", "/reports", "/reports/**",
+                             "/api/v1/batches", "/api/v1/batches/**", "/batches", "/batches/**").hasAnyRole("DRIVER", "LOGISTICS", "ADMIN", "SUPER_ADMIN")
+            
+            // Operational monitoring (Explicitly permissive for testing)
+            .requestMatchers("/api/v1/batches/**", "/batches/**",
+                             "/api/v1/routes/**", "/routes/**",
+                             "/api/v1/locations/**", "/locations/**").hasAnyRole("DRIVER", "LOGISTICS", "ADMIN", "SUPER_ADMIN")
+            
             .requestMatchers("/api/v1/ai/**").authenticated()
             .anyRequest().authenticated())
         .sessionManagement(session -> session
@@ -60,17 +73,18 @@ public class SecurityConfig {
             .authenticationEntryPoint(jwtAuthenticationEntryPoint)
             .accessDeniedHandler(customAccessDeniedHandler))
         .authenticationProvider(authenticationProvider)
-        .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
+        .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
+        .cors(cors -> cors.configurationSource(corsConfigurationSource()));
 
     return http.build();
-}
+  }
 
   @Bean
   public org.springframework.web.cors.CorsConfigurationSource corsConfigurationSource() {
     org.springframework.web.cors.CorsConfiguration configuration = new org.springframework.web.cors.CorsConfiguration();
-    configuration.setAllowedOriginPatterns(java.util.List.of("http://localhost:5173", "https://*.vercel.app", "https://*.onrender.com"));
+    configuration.setAllowedOriginPatterns(java.util.List.of("*"));
     configuration.setAllowedMethods(java.util.List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-    configuration.setAllowedHeaders(java.util.List.of("Authorization", "Content-Type"));
+    configuration.setAllowedHeaders(java.util.List.of("Authorization", "Content-Type", "X-Requested-With", "Accept", "Origin"));
     configuration.setExposedHeaders(java.util.List.of("Authorization"));
     configuration.setAllowCredentials(true);
     

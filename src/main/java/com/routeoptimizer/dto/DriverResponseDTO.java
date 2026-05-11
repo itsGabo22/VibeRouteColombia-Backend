@@ -14,6 +14,12 @@ public class DriverResponseDTO {
   private DriverStatus status;
   private Integer maxCapacity;
   private java.math.BigDecimal costPerHour;
+  private Integer completedOrders;
+  private Integer failedOrders;
+  private String assignedCity;
+  private Long currentBatchId;
+  private Integer currentOrdersCount;
+  private java.util.List<String> activeAddresses;
 
   public static DriverResponseDTO fromEntity(Driver driver) {
     if (driver == null)
@@ -28,6 +34,9 @@ public class DriverResponseDTO {
     dto.setStatus(driver.getStatus());
     dto.setMaxCapacity(driver.getMaxCapacity());
     dto.setCostPerHour(driver.getCostPerHour());
+    dto.setCompletedOrders(driver.getCompletedOrders());
+    dto.setFailedOrders(driver.getFailedOrders());
+    dto.setAssignedCity(driver.getAssignedCity());
     return dto;
   }
 
@@ -93,5 +102,53 @@ public class DriverResponseDTO {
 
   public void setCostPerHour(java.math.BigDecimal costPerHour) {
     this.costPerHour = costPerHour;
+  }
+
+  public Integer getCompletedOrders() {
+    return completedOrders;
+  }
+
+  public void setCompletedOrders(Integer completedOrders) {
+    this.completedOrders = completedOrders;
+  }
+
+  public Integer getFailedOrders() {
+    return failedOrders;
+  }
+
+  public void setFailedOrders(Integer failedOrders) {
+    this.failedOrders = failedOrders;
+  }
+
+  public String getAssignedCity() {
+    return assignedCity;
+  }
+
+  public void setAssignedCity(String assignedCity) {
+    this.assignedCity = assignedCity;
+  }
+
+  public Long getCurrentBatchId() {
+    return currentBatchId;
+  }
+
+  public void setCurrentBatchId(Long currentBatchId) {
+    this.currentBatchId = currentBatchId;
+  }
+
+  public Integer getCurrentOrdersCount() {
+    return currentOrdersCount;
+  }
+
+  public void setCurrentOrdersCount(Integer currentOrdersCount) {
+    this.currentOrdersCount = currentOrdersCount;
+  }
+
+  public java.util.List<String> getActiveAddresses() {
+    return activeAddresses;
+  }
+
+  public void setActiveAddresses(java.util.List<String> activeAddresses) {
+    this.activeAddresses = activeAddresses;
   }
 }
