@@ -120,7 +120,8 @@ public class BatchController {
 
     @PostMapping("/{batchId}/assign-driver/{driverId}")
     @Transactional
-    public ResponseEntity<Map<String, Object>> assignDriverToBatch(@PathVariable Long batchId, @PathVariable Long driverId) {
+    public ResponseEntity<Map<String, Object>> assignDriverToBatch(@PathVariable Long batchId,
+            @PathVariable Long driverId) {
         Batch batch = batchService.assignDriverToBatch(batchId, driverId);
         return ResponseEntity.ok(batchService.convertToSafeMap(batch));
     }

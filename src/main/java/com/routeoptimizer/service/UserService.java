@@ -32,12 +32,20 @@ public class UserService {
         User userToDelete = userRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
         
+        // 1. Protección contra auto-borrado
         if (userToDelete.getEmail().equals(adminEmail)) {
-             throw new RuntimeException("Operación denegada: No puedes eliminar tu propia cuenta de arquitecto.");
+             throw new RuntimeException("Operación denegada: No puedes eliminar tu propia cuenta.");
         }
 
+        // 2. Protección de Cuenta Maestra
+        if (userToDelete.getEmail().equalsIgnoreCase("admin@viberoute.com")) {
+            throw new RuntimeException("Operación denegada: La cuenta maestra no puede ser desactivada.");
+        }
+
+        // 3. Borrado Lógico Automático (vía @SQLDelete en la Entidad)
         userRepository.deleteById(id);
-        auditService.log(adminEmail, "USER_DELETED_PERMANENT", "CRITICAL", "Eliminación total del usuario: " + userToDelete.getEmail());
+        
+        auditService.log(adminEmail, "USER_SOFT_DELETED", "CRITICAL", "Usuario desactivado (Soft Delete): " + userToDelete.getEmail());
     }
 
     @Transactional

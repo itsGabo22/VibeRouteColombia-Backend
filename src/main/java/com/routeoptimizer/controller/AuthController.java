@@ -9,6 +9,8 @@ import com.routeoptimizer.service.AuthService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import org.springframework.security.access.prepost.PreAuthorize;
+
 /**
  * Controlador para gestionar el registro y la autenticación de usuarios.
  */
@@ -27,6 +29,7 @@ public class AuthController {
    * Endpoint para registrar un nuevo usuario en el sistema.
    */
   @PostMapping("/register")
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'LOGISTICS')")
   public ResponseEntity<AuthenticationResponse> register(@jakarta.validation.Valid @RequestBody RegisterRequest request) {
     return ResponseEntity.ok(authService.register(request));
   }
