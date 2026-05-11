@@ -7,6 +7,8 @@ import com.routeoptimizer.model.enums.DriverStatus;
 import com.routeoptimizer.repository.BatchRepository;
 import com.routeoptimizer.repository.DriverRepository;
 import com.routeoptimizer.repository.OrderRepository;
+import com.routeoptimizer.dto.OrderResponseDTO;
+import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -168,15 +170,19 @@ public class BatchService {
         for (Long orderId : orderIds) {
             Order order = orderRepository.findById(orderId)
                     .orElseThrow(() -> new RuntimeException("Order no encontrado: " + orderId));
-            
-            // Validar que el pedido pertenezca a la misma ciudad que el lote (solo si hay una ciudad específica definida)
-            boolean isGlobalBatch = batch.getCity() == null || batch.getCity().trim().isEmpty() || batch.getCity().equalsIgnoreCase("Global");
+
+            // Validar que el pedido pertenezca a la misma ciudad que el lote (solo si hay
+            // una ciudad específica definida)
+            boolean isGlobalBatch = batch.getCity() == null || batch.getCity().trim().isEmpty()
+                    || batch.getCity().equalsIgnoreCase("Global");
             if (!isGlobalBatch && !order.getCity().equalsIgnoreCase(batch.getCity())) {
-                throw new RuntimeException("El pedido #" + orderId + " (" + order.getCity() + ") no pertenece a la ciudad del lote (" + batch.getCity() + ")");
+                throw new RuntimeException("El pedido #" + orderId + " (" + order.getCity()
+                        + ") no pertenece a la ciudad del lote (" + batch.getCity() + ")");
             }
-            
+
             order.setBatchId(batch.getId());
             orderRepository.save(order);
+            batch.getOrders().add(order);
         }
 
         log.info("Lote manual #{} creado con {} pedidos para {}", batch.getId(), orderIds.size(), city);
@@ -188,7 +194,7 @@ public class BatchService {
         Batch batch = findById(batchId);
         Driver driver = driverRepository.findById(driverId)
                 .orElseThrow(() -> new RuntimeException("Driver not found with ID: " + driverId));
-        
+
         batch.setDriver(driver);
         batch.setStatus("ASSIGNED");
 
@@ -230,7 +236,8 @@ public class BatchService {
 
     /**
      * Generates AI copilot tips for the driver via a single Gemini call.
-     * Tips are persisted in the Batch entity (Observer Pattern: assignment triggers generation).
+     * Tips are persisted in the Batch entity (Observer Pattern: assignment triggers
+     * generation).
      */
     private void generateCopilotTips(Batch batch, Driver driver) {
         try {
@@ -291,7 +298,6 @@ public class BatchService {
                 .findFirst();
     }
 
-
     @Transactional
     public void checkAndCompleteBatch(Long batchId) {
         Batch batch = findById(batchId);
@@ -299,8 +305,7 @@ public class BatchService {
             return;
         }
 
-        boolean allTerminal = batch.getOrders().stream().allMatch(o ->
-                o.getStatus() == OrderStatus.DELIVERED ||
+        boolean allTerminal = batch.getOrders().stream().allMatch(o -> o.getStatus() == OrderStatus.DELIVERED ||
                 o.getStatus() == OrderStatus.RETURNED ||
                 o.getStatus() == OrderStatus.CANCELLED);
 
@@ -312,7 +317,8 @@ public class BatchService {
                 driverRepository.save(driver);
             }
             batchRepository.save(batch);
-            log.info("Lote #{} completado automáticamente. Conductor {} está ahora AVAILABLE.", batchId, driver != null ? driver.getName() : "N/A");
+            log.info("Lote #{} completado automáticamente. Conductor {} está ahora AVAILABLE.", batchId,
+                    driver != null ? driver.getName() : "N/A");
         }
     }
 
@@ -321,5 +327,30 @@ public class BatchService {
         Batch batch = findById(id);
         batch.setManifestUrl(manifestUrl);
         return batchRepository.save(batch);
+    }
+
+    public Map<String, Object> convertToSafeMap(Batch batch) {
+        if (batch == null)
+            return Map.of();
+
+        // Forzar la carga de la colección dentro de la transacción si es necesario
+        // (Aunque si este método se llama desde un @Transactional, ya debería estar
+        // disponible)
+        List<Order> orders = batch.getOrders();
+
+        return Map.of(
+                "id", batch.getId(),
+                "status", batch.getStatus() != null ? batch.getStatus() : "",
+                "city", batch.getCity() != null ? batch.getCity() : "",
+                "creationDate", batch.getCreationDate() != null ? batch.getCreationDate().toString() : "",
+                "manifestUrl", batch.getManifestUrl() != null ? batch.getManifestUrl() : "",
+                "aiCopilotTips", batch.getAiCopilotTips() != null ? batch.getAiCopilotTips() : "",
+                "driver",
+                batch.getDriver() != null
+                        ? Map.of("id", batch.getDriver().getId(), "name", batch.getDriver().getName())
+                        : Map.of(),
+                "orders", orders != null
+                        ? orders.stream().map(OrderResponseDTO::fromEntity).collect(Collectors.toList())
+                        : List.of());
     }
 }
