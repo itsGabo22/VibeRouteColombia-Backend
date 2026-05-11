@@ -253,11 +253,15 @@ public class ReportService {
             datePara.setAlignment(ParagraphAlignment.RIGHT);
             datePara.createRun().setText("Fecha de Emisión: " + new java.text.SimpleDateFormat("dd/MM/yyyy HH:mm").format(new Date()));
             
+            String displayCity = (city != null && !city.trim().isEmpty() && !city.equalsIgnoreCase("undefined") && !city.equalsIgnoreCase("Global")) 
+                ? city.toUpperCase() 
+                : null;
+
             XWPFParagraph finTitle = document.createParagraph();
             XWPFRun finTitleRun = finTitle.createRun();
             finTitleRun.setBold(true);
             finTitleRun.setFontSize(14);
-            finTitleRun.setText("1. ESTADO FINANCIERO" + (city != null ? " EN " + city.toUpperCase() : " CONSOLIDADO"));
+            finTitleRun.setText("1. ESTADO FINANCIERO" + (displayCity != null ? " EN " + displayCity : " CONSOLIDADO"));
             
             XWPFParagraph finData = document.createParagraph();
             XWPFRun finRun = finData.createRun();
@@ -307,10 +311,10 @@ public class ReportService {
             String aiAnalysis = contextualAdvisor.askGeminiDirect(aiPrompt);
             XWPFParagraph aiPara = document.createParagraph();
             aiPara.setSpacingBefore(200);
-            XWPFRun aiRun = aiPara.createRun();
-            aiRun.setItalic(true);
-            aiRun.setFontSize(11);
-            aiRun.setText(aiAnalysis);
+            aiPara.setAlignment(ParagraphAlignment.BOTH);
+            
+            // Procesamos el texto para limpiar Markdown y respetar saltos de línea
+            addCleanTextWithNewlines(aiPara, aiAnalysis);
             
             XWPFParagraph rankTitle = document.createParagraph();
             XWPFRun rankTitleRun = rankTitle.createRun();
@@ -349,6 +353,28 @@ public class ReportService {
     public byte[] generateGlobalReport() {
         // Implementación simplificada para el ejemplo
         return "Cierre Global PDF Placeholder".getBytes();
+    }
+
+    private void addCleanTextWithNewlines(XWPFParagraph paragraph, String text) {
+        if (text == null) return;
+        
+        // 1. Limpieza de Markdown común
+        String cleanText = text.replaceAll("\\*\\*\\*", "")
+                             .replaceAll("\\*\\*", "")
+                             .replaceAll("###", "")
+                             .replaceAll("---", "");
+
+        // 2. Separar por líneas para insertar breaks reales de Word
+        String[] lines = cleanText.split("\n");
+        for (int i = 0; i < lines.length; i++) {
+            XWPFRun run = paragraph.createRun();
+            run.setItalic(true);
+            run.setFontSize(11);
+            run.setText(lines[i].trim());
+            if (i < lines.length - 1) {
+                run.addBreak();
+            }
+        }
     }
 
     public List<Map<String, String>> listDocuments() {
