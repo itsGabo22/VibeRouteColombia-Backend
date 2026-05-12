@@ -26,8 +26,8 @@ public class AnalyticsService {
     private final com.routeoptimizer.repository.DriverRepository driverRepository;
 
     public AnalyticsService(OrderRepository orderRepository,
-                            com.routeoptimizer.repository.RouteRepository routeRepository,
-                            com.routeoptimizer.repository.DriverRepository driverRepository) {
+            com.routeoptimizer.repository.RouteRepository routeRepository,
+            com.routeoptimizer.repository.DriverRepository driverRepository) {
         this.orderRepository = orderRepository;
         this.routeRepository = routeRepository;
         this.driverRepository = driverRepository;
@@ -44,22 +44,26 @@ public class AnalyticsService {
         } else {
             revenue = orderRepository.getTotalRevenue();
         }
-        
-        if (revenue == null) revenue = java.math.BigDecimal.ZERO;
+
+        if (revenue == null)
+            revenue = java.math.BigDecimal.ZERO;
 
         java.math.BigDecimal totalCosts = java.math.BigDecimal.ZERO;
         List<com.routeoptimizer.model.entity.Route> routes = routeRepository.findAllOptimized();
 
         for (com.routeoptimizer.model.entity.Route route : routes) {
             if (route.getDriverId() != null) {
-                java.util.Optional<com.routeoptimizer.model.entity.Driver> driverOpt = driverRepository.findById(route.getDriverId());
+                java.util.Optional<com.routeoptimizer.model.entity.Driver> driverOpt = driverRepository
+                        .findById(route.getDriverId());
                 if (driverOpt.isPresent()) {
                     com.routeoptimizer.model.entity.Driver d = driverOpt.get();
                     // Si hay filtro de ciudad, solo sumamos costos de conductores de esa ciudad
-                    if (cityFilter != null && !cityFilter.isEmpty() && !cityFilter.equalsIgnoreCase(d.getAssignedCity())) {
+                    if (cityFilter != null && !cityFilter.isEmpty()
+                            && !cityFilter.equalsIgnoreCase(d.getAssignedCity())) {
                         continue;
                     }
-                    java.math.BigDecimal costPerHour = d.getCostPerHour() != null ? d.getCostPerHour() : java.math.BigDecimal.valueOf(15000);
+                    java.math.BigDecimal costPerHour = d.getCostPerHour() != null ? d.getCostPerHour()
+                            : java.math.BigDecimal.valueOf(15000);
                     double hours = route.getEstimatedTimeSeconds() / 3600.0;
                     java.math.BigDecimal routeCost = costPerHour.multiply(java.math.BigDecimal.valueOf(hours));
                     totalCosts = totalCosts.add(routeCost);
@@ -92,7 +96,8 @@ public class AnalyticsService {
             monthlyRevenue.put(month.trim(), total);
         }
 
-        return new com.routeoptimizer.dto.FinancialAnalyticsDTO(revenue, totalCosts, netProfit, byCity, monthlyRevenue, margin);
+        return new com.routeoptimizer.dto.FinancialAnalyticsDTO(revenue, totalCosts, netProfit, byCity, monthlyRevenue,
+                margin);
     }
 
     /**
@@ -133,7 +138,8 @@ public class AnalyticsService {
             ranked.add(new DriverRankingDTO(
                     dto.driverName(),
                     dto.successfulDeliveries(),
-                    Math.round(dto.effectivenessPercentage() * 10.0) / 10.0, // Formatear a 1 decimal para evitar 99.999999
+                    Math.round(dto.effectivenessPercentage() * 10.0) / 10.0, // Formatear a 1 decimal para evitar
+                                                                             // 99.999999
                     tag));
         }
         return ranked;
