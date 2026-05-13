@@ -12,6 +12,19 @@ import java.io.ByteArrayOutputStream;
 import java.util.*;
 import java.util.stream.Collectors;
 
+// Imports para PDF (especificando clases para evitar ambigüedad)
+import com.lowagie.text.Document;
+import com.lowagie.text.PageSize;
+import com.lowagie.text.Paragraph;
+import com.lowagie.text.Phrase;
+import com.lowagie.text.Element;
+import com.lowagie.text.Font;
+import com.lowagie.text.FontFactory;
+import com.lowagie.text.pdf.PdfPTable;
+import com.lowagie.text.pdf.PdfPCell;
+import com.lowagie.text.pdf.PdfWriter;
+import java.awt.Color;
+
 @Service
 public class ReportService {
 
@@ -61,7 +74,7 @@ public class ReportService {
             }
         }
 
-        List<Order> orders;
+        java.util.List<Order> orders;
         String sheetName;
         
         System.out.println("DEBUG: Generando Excel para ciudad final: [" + targetCity + "]");
@@ -87,7 +100,7 @@ public class ReportService {
             CellStyle headerStyle = workbook.createCellStyle();
             headerStyle.setFillForegroundColor(IndexedColors.INDIGO.getIndex());
             headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
-            Font headerFont = workbook.createFont();
+            org.apache.poi.ss.usermodel.Font headerFont = workbook.createFont();
             headerFont.setColor(IndexedColors.WHITE.getIndex());
             headerFont.setBold(true);
             headerStyle.setFont(headerFont);
@@ -146,7 +159,7 @@ public class ReportService {
             }
         }
 
-        List<Order> orders;
+        java.util.List<Order> orders;
         System.out.println("DEBUG: Generando Word para ciudad final: [" + targetCity + "]");
         
         if (targetCity != null && !targetCity.trim().isEmpty() && !targetCity.equalsIgnoreCase("undefined") && !targetCity.equalsIgnoreCase("Global")) {
@@ -237,27 +250,51 @@ public class ReportService {
         try (XWPFDocument document = new XWPFDocument();
              ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             
+            // DETECCIÓN DE ROL PARA PERSONALIZACIÓN
+            var auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+            com.routeoptimizer.model.enums.Role userRole = com.routeoptimizer.model.enums.Role.ADMIN;
+            String userName = "Administrador";
+            if (auth != null && auth.getPrincipal() instanceof com.routeoptimizer.model.entity.User user) {
+                userRole = user.getRole();
+                userName = user.getName();
+            }
+
+            String displayCity = (city != null && !city.trim().isEmpty() && !city.equalsIgnoreCase("undefined") && !city.equalsIgnoreCase("Global")) 
+                ? city.toUpperCase() 
+                : null;
+
             XWPFParagraph title = document.createParagraph();
             title.setAlignment(ParagraphAlignment.CENTER);
             XWPFRun titleRun = title.createRun();
             titleRun.setBold(true);
             titleRun.setFontSize(22);
             titleRun.setColor("1F4E78"); 
-            titleRun.setText("REPORTE ESTRATÉGICO - " + (city != null ? city.toUpperCase() : "NACIONAL"));
+            
+            if (userRole == com.routeoptimizer.model.enums.Role.LOGISTICS) {
+                titleRun.setText("REPORTE DE DESEMPEÑO OPERATIVO - " + (displayCity != null ? displayCity : "ZONA ASIGNADA"));
+            } else {
+                titleRun.setText("INFORME ESTRATÉGICO DE GESTIÓN " + (displayCity != null ? displayCity : "NACIONAL"));
+            }
+            
             titleRun.addBreak();
             titleRun.setFontSize(14);
-            titleRun.setText("VibeRoute Colombia - Gestión de Operaciones");
+            titleRun.setText("VibeRoute Colombia - " + (userRole == com.routeoptimizer.model.enums.Role.LOGISTICS ? "Coordinación Regional" : "Dirección General"));
             titleRun.addBreak();
             
             XWPFParagraph datePara = document.createParagraph();
             datePara.setAlignment(ParagraphAlignment.RIGHT);
             datePara.createRun().setText("Fecha de Emisión: " + new java.text.SimpleDateFormat("dd/MM/yyyy HH:mm").format(new Date()));
             
+
             XWPFParagraph finTitle = document.createParagraph();
             XWPFRun finTitleRun = finTitle.createRun();
             finTitleRun.setBold(true);
             finTitleRun.setFontSize(14);
-            finTitleRun.setText("1. ESTADO FINANCIERO" + (city != null ? " EN " + city.toUpperCase() : " CONSOLIDADO"));
+            finTitleRun.setText("1. BALANCE FINANCIERO Y RENDIMIENTO" + (displayCity != null ? " EN " + displayCity : " CONSOLIDADO"));
+            
+            // Añadir línea separadora
+            XWPFParagraph line = document.createParagraph();
+            line.setBorderBottom(Borders.SINGLE);
             
             XWPFParagraph finData = document.createParagraph();
             XWPFRun finRun = finData.createRun();
@@ -278,39 +315,41 @@ public class ReportService {
             aiTitleRun.setFontSize(14);
             aiTitleRun.setText("2. RESUMEN SEMANAL DE OPERACIONES (IA)");
             
+            String roleContext = (userRole == com.routeoptimizer.model.enums.Role.LOGISTICS) 
+                ? "Actúa como el Coordinador Regional de VibeRoute para la zona de " + (displayCity != null ? displayCity : "tu región") + ". Tu objetivo es motivar al equipo y analizar la eficiencia local."
+                : "Actúa como el Director General de VibeRoute Colombia. Tu objetivo es un análisis de alto nivel sobre la rentabilidad y el crecimiento estratégico.";
+
             String aiPrompt = String.format("""
-                Actúa como el Coordinador Logístico Senior de VibeRoute Colombia para la zona de %s.
-                Genera un resumen semanal de gestión operativa basado en estos datos REALES:
-                - CIUDAD: %s
+                %s
+                Datos REALES del periodo:
+                - CIUDAD/ÁMBITO: %s
                 - INGRESOS: $%s
                 - COSTOS: $%s
                 - UTILIDAD: $%s
                 - MARGEN: %s%%
                 
-                REGLAS CRÍTICAS:
-                1) NO uses corchetes [] ni pidas "ingresar nombre de zona". Usa el nombre "%s" directamente.
-                2) Analiza por qué los costos están en $%s (si es el caso) y qué implica para la zona.
-                3) DESTACA por nombre a los repartidores del ranking: %s.
-                4) El tono debe ser de un líder que ya conoce la operación, no de una IA genérica.
-                5) Estructura: Resumen de semana -> Análisis de rentabilidad -> Reconocimiento de equipo -> Conclusión estratégica.
+                REGLAS DE FORMATO:
+                1) NO uses corchetes [] ni asteriscos **.
+                2) Usa un lenguaje profesional pero humano.
+                3) Si los costos son $0, analiza si es por eficiencia extrema o por absorción central de costos.
+                4) Destaca al equipo de repartidores: %s.
+                5) Estructura: Mensaje de liderazgo -> Análisis de números -> Proyección operativa.
                 """, 
-                (city != null ? city : "Nacional"), 
-                (city != null ? city : "Nacional"),
+                roleContext,
+                (displayCity != null ? displayCity : "Nivel Nacional"),
                 financials.totalRevenue(), 
                 financials.operationalCosts(), 
                 financials.netProfit(), 
                 financials.profitMarginPercentage(),
-                (city != null ? city : "Nacional"),
-                financials.operationalCosts(),
                 ranking.stream().map(com.routeoptimizer.dto.DriverRankingDTO::driverName).collect(Collectors.joining(", ")));
             
             String aiAnalysis = contextualAdvisor.askGeminiDirect(aiPrompt);
             XWPFParagraph aiPara = document.createParagraph();
             aiPara.setSpacingBefore(200);
-            XWPFRun aiRun = aiPara.createRun();
-            aiRun.setItalic(true);
-            aiRun.setFontSize(11);
-            aiRun.setText(aiAnalysis);
+            aiPara.setAlignment(ParagraphAlignment.BOTH);
+            
+            // Procesamos el texto para limpiar Markdown y respetar saltos de línea
+            addCleanTextWithNewlines(aiPara, aiAnalysis);
             
             XWPFParagraph rankTitle = document.createParagraph();
             XWPFRun rankTitleRun = rankTitle.createRun();
@@ -347,8 +386,184 @@ public class ReportService {
     }
 
     public byte[] generateGlobalReport() {
-        // Implementación simplificada para el ejemplo
-        return "Cierre Global PDF Placeholder".getBytes();
+        // 1. AUTO-DETECCIÓN DE SEGURIDAD PARA FILTRADO REGIONAL
+        var auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        String targetCity = null;
+        if (auth != null && auth.getPrincipal() instanceof com.routeoptimizer.model.entity.User user) {
+            if (user.getRole() == com.routeoptimizer.model.enums.Role.LOGISTICS) {
+                targetCity = user.getAssignedCity();
+            }
+        }
+
+        // 2. Filtrado de Datos por Ciudad
+        final String finalCity = targetCity;
+        java.util.List<Order> allOrders = orderRepository.findAll();
+        java.util.List<Order> filteredOrders;
+        
+        if (finalCity != null && !finalCity.trim().isEmpty()) {
+            filteredOrders = allOrders.stream()
+                .filter(o -> o.getCity() != null && o.getCity().trim().equalsIgnoreCase(finalCity))
+                .limit(100)
+                .collect(Collectors.toList());
+        } else {
+            filteredOrders = allOrders.stream()
+                .limit(100)
+                .sorted(Comparator.comparing(Order::getCity, Comparator.nullsLast(Comparator.naturalOrder())))
+                .collect(Collectors.toList());
+        }
+
+        // 3. Filtrado de Ranking (Solo conductores con actividad en esa ciudad)
+        java.util.List<com.routeoptimizer.dto.DriverRankingDTO> allRankings = analyticsService.getEfficiencyRanking();
+        java.util.List<com.routeoptimizer.dto.DriverRankingDTO> filteredRanking;
+        
+        if (finalCity != null) {
+            // Simplificación: mostramos conductores que tienen pedidos asignados en esa ciudad
+            filteredRanking = allRankings.stream()
+                .filter(dr -> filteredOrders.stream().anyMatch(o -> {
+                    String dName = "Sin Asignar";
+                    if (o.getBatchId() != null) {
+                        try {
+                            var batch = batchService.findById(o.getBatchId());
+                            if (batch != null && batch.getDriver() != null) dName = batch.getDriver().getName();
+                        } catch (Exception e) {}
+                    }
+                    return dName.equalsIgnoreCase(dr.driverName());
+                }))
+                .collect(Collectors.toList());
+        } else {
+            filteredRanking = allRankings;
+        }
+
+        try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            Document document = new Document(PageSize.A4);
+            PdfWriter.getInstance(document, out);
+
+            document.open();
+
+            // FUENTES PDF
+            com.lowagie.text.Font titleFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 18, java.awt.Color.DARK_GRAY);
+            com.lowagie.text.Font sectionFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 14, new java.awt.Color(31, 78, 120));
+            com.lowagie.text.Font headerFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10, java.awt.Color.WHITE);
+            com.lowagie.text.Font normalFont = FontFactory.getFont(FontFactory.HELVETICA, 9, java.awt.Color.BLACK);
+
+            // ENCABEZADO DINÁMICO
+            String reportTitle = "PLANTILLA SEMANAL DE DESPACHO - " + (finalCity != null ? finalCity.toUpperCase() : "NACIONAL");
+            Paragraph title = new Paragraph(reportTitle, titleFont);
+            title.setAlignment(Element.ALIGN_CENTER);
+            document.add(title);
+
+            Paragraph subtitle = new Paragraph("VibeRoute Colombia - Gestión de Flota - Generado: " + new Date(), normalFont);
+            subtitle.setAlignment(Element.ALIGN_CENTER);
+            subtitle.setSpacingAfter(20);
+            document.add(subtitle);
+
+            // --- SECCIÓN 1: DESEMPEÑO DE REPARTIDORES ---
+            Paragraph rankTitle = new Paragraph("1. RANKING DE EFICIENCIA LOCAL", sectionFont);
+            rankTitle.setSpacingAfter(10);
+            document.add(rankTitle);
+
+            PdfPTable rankTable = new PdfPTable(4);
+            rankTable.setWidthPercentage(100);
+            rankTable.setSpacingAfter(20);
+
+            String[] rHeaders = {"Repartidor", "Entregas", "% Efectividad", "Desempeño"};
+            for (String h : rHeaders) {
+                PdfPCell cell = new PdfPCell(new Phrase(h, headerFont));
+                cell.setBackgroundColor(new java.awt.Color(31, 78, 120));
+                cell.setHorizontalAlignment(Element.ALIGN_CENTER);
+                tableAddCellWithPadding(rankTable, cell);
+            }
+
+            for (var dr : filteredRanking) {
+                rankTable.addCell(new Phrase(dr.driverName(), normalFont));
+                rankTable.addCell(new Phrase(String.valueOf(dr.successfulDeliveries()), normalFont));
+                rankTable.addCell(new Phrase(dr.effectivenessPercentage() + "%", normalFont));
+                rankTable.addCell(new Phrase(dr.tag(), normalFont));
+            }
+            if (filteredRanking.isEmpty()) {
+                PdfPCell empty = new PdfPCell(new Phrase("No hay datos de conductores para esta región.", normalFont));
+                empty.setColspan(4);
+                empty.setHorizontalAlignment(Element.ALIGN_CENTER);
+                rankTable.addCell(empty);
+            }
+            document.add(rankTable);
+
+            // --- SECCIÓN 2: DETALLE DE PEDIDOS ---
+            Paragraph ordersTitle = new Paragraph("2. LISTADO DE PEDIDOS DE LA SEMANA", sectionFont);
+            ordersTitle.setSpacingAfter(10);
+            document.add(ordersTitle);
+
+            PdfPTable table = new PdfPTable(6);
+            table.setWidthPercentage(100);
+            table.setWidths(new float[]{1f, 2f, 3f, 2f, 2f, 2f});
+
+            // Headers
+            String[] headers = {"ID", "Referencia", "Cliente", "Ciudad", "Estado", "Repartidor"};
+            for (String h : headers) {
+                PdfPCell cell = new PdfPCell(new Phrase(h, headerFont));
+                cell.setBackgroundColor(new java.awt.Color(64, 64, 64));
+                cell.setHorizontalAlignment(Element.ALIGN_CENTER);
+                tableAddCellWithPadding(table, cell);
+            }
+
+            // Datos
+            for (Order o : filteredOrders) {
+                table.addCell(new Phrase(String.valueOf(o.getId()), normalFont));
+                table.addCell(new Phrase(o.getClientReference() != null ? o.getClientReference() : "-", normalFont));
+                table.addCell(new Phrase(o.getClientName() != null ? o.getClientName() : "-", normalFont));
+                table.addCell(new Phrase(o.getCity() != null ? o.getCity() : "-", normalFont));
+                table.addCell(new Phrase(o.getStatus().toString(), normalFont));
+                
+                String driverName = "Sin Asignar";
+                if (o.getBatchId() != null) {
+                    try {
+                        var batch = batchService.findById(o.getBatchId());
+                        if (batch != null && batch.getDriver() != null) {
+                            driverName = batch.getDriver().getName();
+                        }
+                    } catch (Exception e) {}
+                }
+                table.addCell(new Phrase(driverName, normalFont));
+            }
+            document.add(table);
+
+            // SECCIÓN DE FIRMAS
+            Paragraph footer = new Paragraph("\n\n__________________________          __________________________\n      Firma Coordinador                     Firma Transportador", normalFont);
+            footer.setAlignment(Element.ALIGN_CENTER);
+            document.add(footer);
+
+            document.close();
+            return out.toByteArray();
+        } catch (Exception e) {
+            throw new RuntimeException("Error generando Plantilla Semanal PDF: " + e.getMessage());
+        }
+    }
+
+    private void tableAddCellWithPadding(PdfPTable table, PdfPCell cell) {
+        cell.setPadding(5);
+        table.addCell(cell);
+    }
+
+    private void addCleanTextWithNewlines(XWPFParagraph paragraph, String text) {
+        if (text == null) return;
+        
+        // 1. Limpieza de Markdown común
+        String cleanText = text.replaceAll("\\*\\*\\*", "")
+                             .replaceAll("\\*\\*", "")
+                             .replaceAll("###", "")
+                             .replaceAll("---", "");
+
+        // 2. Separar por líneas para insertar breaks reales de Word
+        String[] lines = cleanText.split("\n");
+        for (int i = 0; i < lines.length; i++) {
+            XWPFRun run = paragraph.createRun();
+            run.setItalic(true);
+            run.setFontSize(11);
+            run.setText(lines[i].trim());
+            if (i < lines.length - 1) {
+                run.addBreak();
+            }
+        }
     }
 
     public List<Map<String, String>> listDocuments() {

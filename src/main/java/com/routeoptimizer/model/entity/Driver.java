@@ -21,7 +21,10 @@ public class Driver extends User {
   private DriverStatus status;
 
   @Column(name = "max_capacity", nullable = false)
-  private Integer maxCapacity;
+  private Integer maxCapacity = 20;
+
+  @Column(name = "license_plate")
+  private String licensePlate;
 
   @Column(name = "cost_per_hour", precision = 10, scale = 2)
   private java.math.BigDecimal costPerHour;
@@ -98,5 +101,13 @@ public class Driver extends User {
 
   public void setFailedOrders(Integer failedOrders) {
     this.failedOrders = failedOrders;
+  }
+
+  public String getLicensePlate() {
+    return licensePlate;
+  }
+
+  public void setLicensePlate(String licensePlate) {
+    this.licensePlate = licensePlate;
   }
 }
