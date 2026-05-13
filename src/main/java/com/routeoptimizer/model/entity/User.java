@@ -8,6 +8,9 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
+import org.hibernate.annotations.SQLDelete;
+import org.hibernate.annotations.Where;
+
 import java.util.Collection;
 import java.util.List;
 
@@ -18,6 +21,8 @@ import java.util.List;
 @Entity
 @Table(name = "users")
 @Inheritance(strategy = InheritanceType.JOINED)
+@SQLDelete(sql = "UPDATE users SET enabled = false WHERE id = ?")
+@Where(clause = "enabled = true")
 public class User implements UserDetails {
 
   @Id
@@ -50,6 +55,9 @@ public class User implements UserDetails {
   @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
   @Column(name = "pending_password_hash")
   private String pendingPasswordHash;
+
+  @Column(name = "enabled")
+  private boolean enabled = true;
 
   public User() {
   }
@@ -87,7 +95,7 @@ public class User implements UserDetails {
 
   @Override
   public boolean isEnabled() {
-    return true;
+    return enabled;
   }
 
   // Getters y Setters
@@ -161,5 +169,13 @@ public class User implements UserDetails {
 
   public void setPendingPasswordHash(String pendingPasswordHash) {
     this.pendingPasswordHash = pendingPasswordHash;
+  }
+
+  public boolean isEnabledValue() {
+    return enabled;
+  }
+
+  public void setEnabled(boolean enabled) {
+    this.enabled = enabled;
   }
 }
