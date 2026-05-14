@@ -57,15 +57,34 @@ public class BatchController {
             if (batch == null)
                 return ResponseEntity.noContent().build();
 
-            // Retornamos un Map seguro para evitar LazyInitializationException en
-            // collections
+            // Mapeamos los pedidos iterativamente a DTOs en línea (Map) para evitar LazyInitializationException
+            List<Map<String, Object>> safeOrders = List.of();
+            if (batch.getOrders() != null) {
+                safeOrders = batch.getOrders().stream().map(order -> {
+                    Map<String, Object> oMap = new java.util.HashMap<>();
+                    oMap.put("id", order.getId());
+                    oMap.put("address", order.getAddress());
+                    oMap.put("clientName", order.getClientName());
+                    // Order no tiene campo 'phone', devolvemos string vacío para no romper contrato
+                    oMap.put("phone", ""); 
+                    oMap.put("clientReference", order.getClientReference());
+                    oMap.put("location", order.getLocation());
+                    oMap.put("status", order.getStatus() != null ? order.getStatus().name() : null);
+                    oMap.put("deliveryOrder", order.getDeliveryOrder());
+                    return oMap;
+                }).collect(Collectors.toList());
+            }
+
+            // Retornamos un Map seguro
             return ResponseEntity.ok(Map.of(
                     "id", batch.getId(),
                     "aiCopilotTips", batch.getAiCopilotTips() != null ? batch.getAiCopilotTips() : "",
                     "driver",
                     batch.getDriver() != null
                             ? Map.of("id", batch.getDriver().getId(), "name", batch.getDriver().getName())
-                            : Map.of()));
+                            : Map.of(),
+                    "orders", safeOrders
+            ));
         } catch (Exception e) {
             return ResponseEntity.noContent().build();
         }
