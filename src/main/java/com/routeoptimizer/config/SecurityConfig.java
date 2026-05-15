@@ -45,11 +45,9 @@ public class SecurityConfig {
 
   /**
    * Orígenes CORS permitidos, inyectados desde la variable de entorno.
-   * Valor por defecto: localhost:3000 en HTTP y HTTPS + loopback IPv4.
-   * Para pruebas de campo desde móviles en red local, añadir la IP del
-   * equipo de desarrollo (ej: http://192.168.1.100:3000).
+   * Usamos el nombre VIBEROUTE_CORS_ALLOWED_ORIGINS especificado.
    */
-  @Value("${VIBEROUTE_CORS_ALLOWED:http://localhost:3000,https://localhost:3000,http://127.0.0.1:3000}")
+  @Value("${VIBEROUTE_CORS_ALLOWED_ORIGINS:http://localhost:3000,http://127.0.0.1:3000}")
   private String allowedOriginsRaw;
 
   public SecurityConfig(JwtAuthenticationFilter jwtAuthFilter, 
@@ -129,29 +127,41 @@ public class SecurityConfig {
 
   /**
    * Fuente de configuración CORS dinámica.
-   * Parsea VIBEROUTE_CORS_ALLOWED (separado por comas) y registra
-   * los orígenes permitidos. Nunca usa wildcard "*".
+   * Parsea VIBEROUTE_CORS_ALLOWED_ORIGINS y asegura SIEMPRE la existencia de Vercel.
    */
   @Bean
   public CorsConfigurationSource corsConfigurationSource() {
-    List<String> origins = Arrays.stream(allowedOriginsRaw.split(","))
+    List<String> origins = new java.util.ArrayList<>(Arrays.stream(allowedOriginsRaw.split(","))
         .map(String::trim)
         .filter(s -> !s.isEmpty())
-        .toList();
+        .toList());
+
+    // HARDENING ENTERPRISE: Asegurar siempre Vercel sin importar qué diga el .env local
+    String vercelDomain = "https://vibe-route-colombia-frontend.vercel.app";
+    if (!origins.contains(vercelDomain)) {
+        origins.add(vercelDomain);
+    }
 
     CorsConfiguration configuration = new CorsConfiguration();
     configuration.setAllowedOrigins(origins);
-    configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-    configuration.setAllowedHeaders(List.of(
-        "Authorization", "Content-Type", "X-Requested-With",
-        "Accept", "Origin", "Cache-Control"
-    ));
+    
+    // Soportar explicitamente OPTIONS para el preflight
+    configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"));
+    
+    // Permitir todos los headers (*) evita rechazos de preflight por headers custom (ej. X-Requested-With)
+    configuration.setAllowedHeaders(List.of("*"));
+    
+    // Exponer header Authorization para que el frontend pueda leer el JWT si viene en header (aunque usen body)
     configuration.setExposedHeaders(List.of("Authorization"));
+    
+    // Obligatorio para JWT en cookies o peticiones autenticadas
     configuration.setAllowCredentials(true);
-    // Cachear la respuesta preflight 1 hora (reduce roundtrips desde móviles)
+    
+    // Cachear la respuesta preflight 1 hora (mejora rendimiento en redes móviles)
     configuration.setMaxAge(3600L);
     
     UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+    // Aplicar a TODAS las rutas (/**)
     source.registerCorsConfiguration("/**", configuration);
     return source;
   }
