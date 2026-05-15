@@ -83,6 +83,6 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     @Query("SELECT COUNT(o) FROM Order o JOIN Batch b ON o.batchId = b.id JOIN b.driver r WHERE r.name = :name AND (o.status = com.routeoptimizer.model.enums.OrderStatus.CANCELLED OR o.status = com.routeoptimizer.model.enums.OrderStatus.RETURNED)")
     long countFailedDeliveriesForDriver(@Param("name") String name);
 
-    @Query("SELECT o FROM Order o LEFT JOIN Batch b ON o.batchId = b.id LEFT JOIN b.driver d")
+    @Query("SELECT o FROM Order o")
     List<Order> findAllWithDriver();
 }
