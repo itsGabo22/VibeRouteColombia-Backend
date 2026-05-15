@@ -11,4 +11,7 @@ import java.util.Optional;
 public interface UserRepository extends JpaRepository<User, Long> {
   Optional<User> findByEmail(String email);
   Optional<User> findByEmailIgnoreCase(String email);
+
+  @org.springframework.data.jpa.repository.Query(value = "SELECT * FROM users WHERE email = ?1 LIMIT 1", nativeQuery = true)
+  Optional<User> findIncludingDisabledByEmail(String email);
 }

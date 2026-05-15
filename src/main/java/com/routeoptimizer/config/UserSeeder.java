@@ -19,6 +19,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Component
 public class UserSeeder implements CommandLineRunner {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(UserSeeder.class);
+
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JdbcTemplate jdbcTemplate;
@@ -36,13 +38,13 @@ public class UserSeeder implements CommandLineRunner {
     private String adminPassword;
 
     @Override
-    @Transactional
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
     public void run(String... args) throws Exception {
         try {
-            System.out.println("\n" + "=".repeat(60));
-            System.out.println("🛡️ [SECURITY] Iniciando sincronización de cuenta maestra...");
-            System.out.println("📧 [SYNC] Email detectado: " + adminEmail);
-            System.out.println("=".repeat(60));
+            log.info("=".repeat(60));
+            log.info("🛡️ [SECURITY] Iniciando sincronización de cuenta maestra...");
+            log.info("📧 [SYNC] Email detectado: {}", adminEmail);
+            log.info("=".repeat(60));
 
             // PASO 1: Eliminar restricción de base de datos que bloquea SUPER_ADMIN
             // (PostgreSQL fix)
@@ -55,30 +57,43 @@ public class UserSeeder implements CommandLineRunner {
             // PASO 2: Sincronizar/Crear el Super Admin forzosamente
             String hashedMasterPass = passwordEncoder.encode(adminPassword);
 
-            userRepository.findByEmail(adminEmail).ifPresentOrElse(
-                    user -> {
-                        user.setRole(Role.SUPER_ADMIN);
-                        user.setPasswordHash(hashedMasterPass);
-                        user.setName("Arquitecto Maestro (VibeRoute)");
-                        user.setAssignedCity("Global");
-                        userRepository.save(user);
-                        System.out.println("✅ [SYNC] Cuenta maestra ACTUALIZADA con credenciales del .env.");
-                    },
-                    () -> {
-                        User superAdmin = new User();
-                        superAdmin.setName("Arquitecto Maestro (VibeRoute)");
-                        superAdmin.setEmail(adminEmail);
-                        superAdmin.setPasswordHash(hashedMasterPass);
-                        superAdmin.setRole(Role.SUPER_ADMIN);
-                        superAdmin.setAssignedCity("Global");
-                        superAdmin.setPhone("3000000000");
-                        userRepository.save(superAdmin);
-                        System.out.println("⭐ [SEEDER] Cuenta maestra CREADA desde cero.");
-                    });
-            System.out.println("=".repeat(60) + "\n");
+            // Única consulta limpia que trae al usuario físico (incluyendo deshabilitados)
+            java.util.Optional<User> existing = userRepository.findIncludingDisabledByEmail(adminEmail);
+
+            if (existing.isPresent()) {
+                User user = existing.get();
+
+                // Si está eliminado lógicamente (soft-delete), abortamos la inserción y evitamos DuplicateKeyException
+                if (!user.isEnabled()) {
+                    log.warn("⚠️ [SYNC] La cuenta maestra existe pero está deshabilitada (soft-deleted). Se omite creación/actualización para evitar conflictos.");
+                    log.info("=".repeat(60));
+                    return;
+                }
+
+                // Si existe y está habilitado, conservamos la lógica actual de actualizar sus credenciales
+                user.setRole(Role.SUPER_ADMIN);
+                user.setPasswordHash(hashedMasterPass);
+                user.setName("Arquitecto Maestro (VibeRoute)");
+                user.setAssignedCity("Global");
+                userRepository.save(user);
+                log.info("✅ [SYNC] Cuenta maestra ACTUALIZADA con credenciales del .env.");
+            } else {
+                // Si no existe físicamente en lo absoluto, es 100% seguro hacer el insert.
+                User superAdmin = new User();
+                superAdmin.setName("Arquitecto Maestro (VibeRoute)");
+                superAdmin.setEmail(adminEmail);
+                superAdmin.setPasswordHash(hashedMasterPass);
+                superAdmin.setRole(Role.SUPER_ADMIN);
+                superAdmin.setAssignedCity("Global");
+                superAdmin.setPhone("3000000000");
+                userRepository.save(superAdmin);
+                log.info("⭐ [SEEDER] Cuenta maestra CREADA desde cero.");
+            }
+            log.info("=".repeat(60));
         } catch (Exception e) {
-            System.err.println("⚠️ [CRITICAL] Fallo en el Seeder de usuarios: " + e.getMessage());
-            System.err.println("La aplicación continuará intentando arrancar...");
+            // Protección defensiva extrema: El Seeder JAMÁS debe tumbar la aplicación
+            log.error("⚠️ [CRITICAL] Fallo inesperado en el Seeder de usuarios: {}", e.getMessage(), e);
+            log.error("La aplicación ignorará este fallo y continuará su arranque con normalidad...");
         }
     }
 }
