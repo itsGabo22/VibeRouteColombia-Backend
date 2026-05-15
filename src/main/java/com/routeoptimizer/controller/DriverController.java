@@ -17,7 +17,6 @@ import java.util.stream.Collectors;
 /**
  * Controlador REST para Drivers.
  */
-@CrossOrigin(origins = "*")
 @RestController
 @RequestMapping({"/api/v1/drivers", "/drivers"})
 public class DriverController {
