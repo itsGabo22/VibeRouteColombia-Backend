@@ -57,20 +57,24 @@ public class UserSeeder implements CommandLineRunner {
             // PASO 2: Sincronizar/Crear el Super Admin forzosamente
             String hashedMasterPass = passwordEncoder.encode(adminPassword);
 
-            // Única consulta limpia que trae al usuario físico (incluyendo deshabilitados)
-            java.util.Optional<User> existing = userRepository.findIncludingDisabledByEmail(adminEmail);
+            // Única consulta escalar limpia. Retorna Optional.empty() si no existe, o true/false según su 'enabled'
+            java.util.Optional<Boolean> physicalStatus = userRepository.checkPhysicalEnabledStatus(adminEmail);
 
-            if (existing.isPresent()) {
-                User user = existing.get();
+            if (physicalStatus.isPresent()) {
+                boolean isEnabled = physicalStatus.get();
 
                 // Si está eliminado lógicamente (soft-delete), abortamos la inserción y evitamos DuplicateKeyException
-                if (!user.isEnabled()) {
+                if (!isEnabled) {
                     log.warn("⚠️ [SYNC] La cuenta maestra existe pero está deshabilitada (soft-deleted). Se omite creación/actualización para evitar conflictos.");
                     log.info("=".repeat(60));
                     return;
                 }
 
-                // Si existe y está habilitado, conservamos la lógica actual de actualizar sus credenciales
+                // Si existe físicamente y ESTÁ habilitado, ahora SÍ usamos JPQL seguro para obtener la entidad polimórfica
+                User user = userRepository.findByEmail(adminEmail).orElseThrow(() -> 
+                    new IllegalStateException("Inconsistencia en BD: Usuario existe y está activo físicamente, pero JPQL no lo encontró."));
+
+                // Conservamos la lógica actual de actualizar sus credenciales
                 user.setRole(Role.SUPER_ADMIN);
                 user.setPasswordHash(hashedMasterPass);
                 user.setName("Arquitecto Maestro (VibeRoute)");
