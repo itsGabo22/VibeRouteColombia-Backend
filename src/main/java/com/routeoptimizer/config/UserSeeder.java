@@ -57,21 +57,22 @@ public class UserSeeder implements CommandLineRunner {
             // PASO 2: Sincronizar/Crear el Super Admin forzosamente
             String hashedMasterPass = passwordEncoder.encode(adminPassword);
 
-            // Única consulta escalar limpia. Retorna Optional.empty() si no existe, o true/false según su 'enabled'
-            java.util.Optional<Boolean> physicalStatus = userRepository.checkPhysicalEnabledStatus(adminEmail);
+            // Única consulta escalar 100% segura basada en ID
+            java.util.Optional<Long> physicalIdOpt = userRepository.findPhysicalIdByEmail(adminEmail);
 
-            if (physicalStatus.isPresent()) {
-                boolean isEnabled = physicalStatus.get();
+            if (physicalIdOpt.isPresent()) {
+                Long userId = physicalIdOpt.get();
+                boolean isEnabled = userRepository.isPhysicalUserEnabled(userId);
 
-                // Si está eliminado lógicamente (soft-delete), abortamos la inserción y evitamos DuplicateKeyException
+                // Si está eliminado lógicamente (soft-delete), abortamos la inserción y evitamos conflictos
                 if (!isEnabled) {
-                    log.warn("⚠️ [SYNC] La cuenta maestra existe pero está deshabilitada (soft-deleted). Se omite creación/actualización para evitar conflictos.");
+                    log.warn("⚠️ [SYNC] La cuenta maestra existe (ID: {}) pero está deshabilitada (soft-deleted). Se omite creación/actualización.", userId);
                     log.info("=".repeat(60));
                     return;
                 }
 
                 // Si existe físicamente y ESTÁ habilitado, ahora SÍ usamos JPQL seguro para obtener la entidad polimórfica
-                User user = userRepository.findByEmail(adminEmail).orElseThrow(() -> 
+                User user = userRepository.findByEmailIgnoreCase(adminEmail).orElseThrow(() -> 
                     new IllegalStateException("Inconsistencia en BD: Usuario existe y está activo físicamente, pero JPQL no lo encontró."));
 
                 // Conservamos la lógica actual de actualizar sus credenciales
